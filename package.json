@@ -1,0 +1,40 @@
+{
+  "name": "vbeats-app",
+  "version": "1.0.0",
+  "description": "VbeatS - Verified Beat Studios mobile app",
+  "main": "index.js",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "eject": "expo eject",
+    "eas:build:dev": "eas build --platform all --profile development",
+    "eas:build:preview": "eas build --platform all --profile preview",
+    "eas:build:prod": "eas build --platform all --profile production",
+    "eas:submit": "eas submit --platform all --profile production",
+    "test": "jest"
+  },
+  "dependencies": {
+    "expo": "^50.0.0",
+    "expo-av": "^13.10.0",
+    "expo-splash-screen": "^0.26.0",
+    "expo-status-bar": "^1.11.0",
+    "react": "^18.2.0",
+    "react-native": "^0.73.0",
+    "react-native-gesture-handler": "^2.14.0",
+    "react-native-reanimated": "^3.6.0",
+    "@thirdweb-dev/react-native": "^4.0.0",
+    "@react-navigation/native": "^6.1.0",
+    "@react-navigation/bottom-tabs": "^6.5.0",
+    "stripe-react-native": "^12.0.0",
+    "ethers": "^6.8.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.23.0",
+    "@types/react": "^18.2.0",
+    "@types/react-native": "^0.73.0",
+    "babel-jest": "^29.7.0",
+    "jest": "^29.7.0"
+  }
+}
