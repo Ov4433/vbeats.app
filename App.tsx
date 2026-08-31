@@ -2,7 +2,7 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AuthProvider, useAuthContext } from './app/context/AuthContext';
-import BottomTabNavigator from './app/navigation/BottomTabNavigator';
+import AppNavigator from './app/navigation/AppNavigator';
 import AuthNavigator from './app/navigation/AuthNavigator';
 import { initializeBlockchain } from './app/services/blockchain';
 import { StyleSheet, View, ActivityIndicator } from 'react-native';
@@ -20,7 +20,7 @@ function RootNavigator() {
 
   return (
     <NavigationContainer>
-      {isAuthenticated ? <BottomTabNavigator /> : <AuthNavigator />}
+      {isAuthenticated ? <AppNavigator /> : <AuthNavigator />}
     </NavigationContainer>
   );
 }

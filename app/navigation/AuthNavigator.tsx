@@ -11,6 +11,7 @@ export default function AuthNavigator() {
       screenOptions={{
         headerShown: false,
         animationEnabled: true,
+        cardStyle: { backgroundColor: '#000' },
       }}
     >
       <Stack.Screen name="Login" component={LoginScreen} />
