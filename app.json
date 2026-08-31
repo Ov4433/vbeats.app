@@ -1,0 +1,60 @@
+{
+  "expo": {
+    "name": "VbeatS",
+    "slug": "vbeats-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTabletMode": true,
+      "bundleIdentifier": "com.vbeats.app",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "VbeatS needs access to your microphone to record music performances.",
+        "NSLocalNetworkUsageDescription": "VbeatS uses local network to connect to your beat server.",
+        "NSBonjourServices": ["_vbeats._tcp"]
+      }
+    },
+    "android": {
+      "package": "com.vbeats.app",
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Allow VbeatS to access your microphone for recording performances."
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "13.0"
+          },
+          "android": {
+            "minSdkVersion": 21,
+            "compileSdkVersion": 33,
+            "targetSdkVersion": 33
+          }
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "YOUR_EAS_PROJECT_ID"
+      },
+      "apiUrl": "https://api.vbeats.app",
+      "blockchainRpc": "https://mainnet.base.org"
+    },
+    "scheme": "vbeats"
+  }
+}
