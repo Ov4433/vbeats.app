@@ -1,13 +1,32 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { AuthProvider } from './app/context/AuthContext';
+import { AuthProvider, useAuthContext } from './app/context/AuthContext';
 import BottomTabNavigator from './app/navigation/BottomTabNavigator';
+import AuthNavigator from './app/navigation/AuthNavigator';
 import { initializeBlockchain } from './app/services/blockchain';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, View, ActivityIndicator } from 'react-native';
+
+function RootNavigator() {
+  const { isAuthenticated, loading } = useAuthContext();
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#007AFF" />
+      </View>
+    );
+  }
+
+  return (
+    <NavigationContainer>
+      {isAuthenticated ? <BottomTabNavigator /> : <AuthNavigator />}
+    </NavigationContainer>
+  );
+}
 
 export default function App() {
-  useEffect(() => {
+  React.useEffect(() => {
     // Initialize blockchain on app startup
     initializeBlockchain();
   }, []);
@@ -15,9 +34,7 @@ export default function App() {
   return (
     <GestureHandlerRootView style={styles.container}>
       <AuthProvider>
-        <NavigationContainer>
-          <BottomTabNavigator />
-        </NavigationContainer>
+        <RootNavigator />
       </AuthProvider>
     </GestureHandlerRootView>
   );
@@ -26,5 +43,11 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#000',
   },
 });

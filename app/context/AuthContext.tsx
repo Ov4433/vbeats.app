@@ -1,19 +1,29 @@
 import React, { createContext, useContext, ReactNode } from 'react';
-import { useAuth } from '../hooks';
+import { useAuth as useAuthHook } from '../hooks/useAuth';
+
+interface User {
+  id: string;
+  email: string;
+  username: string;
+  wallet?: string;
+}
 
 interface AuthContextType {
-  user: any;
+  user: User | null;
   loading: boolean;
   error: string | null;
-  login: (email: string, password: string) => Promise<void>;
-  logout: () => void;
   isAuthenticated: boolean;
+  login: (email: string, password: string) => Promise<any>;
+  signup: (email: string, password: string, username: string) => Promise<any>;
+  logout: () => Promise<void>;
+  refreshToken: () => Promise<void>;
+  checkAuthStatus: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const auth = useAuth();
+  const auth = useAuthHook();
 
   return (
     <AuthContext.Provider value={auth}>
