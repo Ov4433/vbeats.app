@@ -99,6 +99,48 @@ npm run eas:build:prod
 npm run eas:submit
 ```
 
+## 🌐 Live Release Scope
+
+VbeatS production rollout targets **all three platforms**:
+- iOS App Store release
+- Android Play Store release
+- Web deployment
+
+Production runtime targets:
+- API: `https://api.vbeats.app`
+- Blockchain RPC: `https://mainnet.base.org`
+- EAS project linkage: `EAS_PROJECT_ID` via environment
+
+## ✅ Release Readiness
+
+Run release validation before production builds:
+
+```bash
+npm run release:readiness
+```
+
+This check verifies:
+- No placeholder EAS project ID remains
+- Production profile does not use localhost
+- Production blockchain RPC uses mainnet
+- `.env.example` does not contain test keys or staging defaults
+
+## 🚢 Staged Rollout
+
+1. Build and test internal development profile (`eas:build:dev`)
+2. Run preview/internal QA (`eas:build:preview`)
+3. Trigger production build (`eas:build:prod`)
+4. Submit production binaries (`eas:submit`)
+5. Deploy web build and monitor startup health
+
+## 📈 Post-Launch Operations
+
+- Enable crash and error monitoring for mobile and web
+- Monitor API uptime and payment webhook health
+- Track signups, activations, purchases, and retention metrics
+- Keep a first-week hotfix branch/process ready for rapid patches
+- Maintain rollback runbooks for app/web/API incidents
+
 ## 📦 Tech Stack
 
 ### Frontend

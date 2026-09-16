@@ -34,11 +34,9 @@ echo "🔗 Initializing EAS (Expo Application Services)..."
 echo "Please follow the prompts to link your Expo account."
 echo ""
 
-# Check if eas.json exists
-if grep -q "YOUR_EAS_PROJECT_ID" eas.json; then
-    echo "⚠️  eas.json contains placeholder project ID."
-    echo "Run: expo eas:init"
-    echo "Then update app.json with your actual EAS Project ID"
+if [ -z "${EAS_PROJECT_ID}" ]; then
+    echo "⚠️  EAS_PROJECT_ID is not set."
+    echo "Set EAS_PROJECT_ID in your environment or .env before production builds."
     echo ""
 fi
 
