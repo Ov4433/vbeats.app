@@ -1,3 +1,9 @@
+jest.mock('expo-secure-store', () => ({
+  setItemAsync: jest.fn(),
+  getItemAsync: jest.fn(),
+  deleteItemAsync: jest.fn(),
+}));
+
 import * as SecureStore from 'expo-secure-store';
 import { getToken, storeToken } from '../app/services/tokenService';
 
