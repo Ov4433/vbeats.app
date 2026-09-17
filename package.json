@@ -18,7 +18,11 @@
     "release:readiness": "node scripts/release-readiness-check.js"
   },
   "dependencies": {
+    "@react-navigation/bottom-tabs": "^6.5.0",
+    "@react-navigation/native": "^6.1.0",
+    "@stripe/stripe-react-native": "^0.76.0",
     "buffer": "^6.0.3",
+    "ethers": "^6.8.0",
     "expo": "^50.0.0",
     "expo-av": "^13.10.0",
     "expo-secure-store": "~12.8.1",
@@ -27,18 +31,13 @@
     "react": "^18.2.0",
     "react-native": "^0.73.0",
     "react-native-gesture-handler": "^2.14.0",
-    "react-native-reanimated": "^3.6.0",
-    "@react-navigation/native": "^6.1.0",
-    "@react-navigation/bottom-tabs": "^6.5.0",
-    "@stripe/stripe-react-native": "^0.76.0",
-    "ethers": "^6.8.0"
+    "react-native-reanimated": "^3.6.0"
   },
   "devDependencies": {
     "@babel/core": "^7.23.0",
     "@types/react": "^18.2.0",
     "@types/react-native": "^0.73.0",
     "babel-jest": "^29.7.0",
-    "jest": "^29.7.0",
-    "jest-expo": "^50.0.4"
+    "jest": "^29.7.0"
   }
 }
