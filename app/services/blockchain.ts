@@ -3,8 +3,7 @@
 
 import { ethers } from 'ethers';
 
-const BLOCKCHAIN_RPC_URL = process.env.REACT_APP_BLOCKCHAIN_RPC_URL || 'https://mainnet.base.org';
-const NETWORK_ID = parseInt(process.env.REACT_APP_BLOCKCHAIN_NETWORK_ID || '8453');
+const BLOCKCHAIN_RPC_URL = process.env.EXPO_PUBLIC_BLOCKCHAIN_RPC || 'https://mainnet.base.org';
 
 let provider: ethers.JsonRpcProvider;
 

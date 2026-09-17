@@ -2,27 +2,37 @@
   "expo": {
     "name": "VbeatS",
     "slug": "vbeats-app",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
+    "scheme": "vbeats",
     "userInterfaceStyle": "dark",
     "assetBundlePatterns": ["**/*"],
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "ios": {
-      "supportsTabletMode": true,
+      "supportsTablet": true,
       "bundleIdentifier": "com.vbeats.app",
+      "buildNumber": "2",
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "VbeatS needs access to your microphone to record music performances.",
-        "NSLocalNetworkUsageDescription": "VbeatS uses local network to connect to your beat server.",
-        "NSBonjourServices": ["_vbeats._tcp"]
+        "NSMicrophoneUsageDescription": "VbeatS needs microphone access so creators can record beat previews and performances.",
+        "NSCameraUsageDescription": "VbeatS uses camera access for profile and beat artwork uploads.",
+        "NSPhotoLibraryUsageDescription": "VbeatS uses photo library access for profile and beat artwork uploads."
       }
     },
     "android": {
       "package": "com.vbeats.app",
+      "versionCode": 2,
       "permissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.INTERNET",
         "android.permission.ACCESS_NETWORK_STATE"
-      ]
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#000000"
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -49,12 +59,8 @@
       ]
     ],
     "extra": {
-      "eas": {
-        "projectId": "YOUR_EAS_PROJECT_ID"
-      },
       "apiUrl": "https://api.vbeats.app",
       "blockchainRpc": "https://mainnet.base.org"
-    },
-    "scheme": "vbeats"
+    }
   }
 }

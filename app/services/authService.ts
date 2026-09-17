@@ -1,6 +1,3 @@
-// Authentication Service for VbeatS
-// Handles login, signup, logout, and token refresh
-
 import { apiRequest } from './api';
 import {
   storeToken,
@@ -33,77 +30,51 @@ interface AuthResponse {
   };
 }
 
-/**
- * Login user with email and password
- */
 export async function login(payload: LoginPayload): Promise<AuthResponse> {
-  try {
-    const response = await apiRequest<AuthResponse>('/auth/login', {
-      method: 'POST',
-      body: payload,
-    });
+  const response = await apiRequest<AuthResponse>('/auth/login', {
+    method: 'POST',
+    body: payload,
+  });
 
-    // Store tokens securely
-    await storeToken(response.token);
-    await storeRefreshToken(response.refreshToken);
+  await storeToken(response.token);
+  await storeRefreshToken(response.refreshToken);
 
-    return response;
-  } catch (error) {
-    console.error('Login error:', error);
-    throw error;
-  }
+  return response;
 }
 
-/**
- * Sign up new user
- */
 export async function signup(payload: SignupPayload): Promise<AuthResponse> {
-  try {
-    const response = await apiRequest<AuthResponse>('/auth/signup', {
-      method: 'POST',
-      body: payload,
-    });
+  const response = await apiRequest<AuthResponse>('/auth/signup', {
+    method: 'POST',
+    body: payload,
+  });
 
-    // Store tokens securely
-    await storeToken(response.token);
-    await storeRefreshToken(response.refreshToken);
+  await storeToken(response.token);
+  await storeRefreshToken(response.refreshToken);
 
-    return response;
-  } catch (error) {
-    console.error('Signup error:', error);
-    throw error;
-  }
+  return response;
 }
 
-/**
- * Logout user
- */
 export async function logout(): Promise<void> {
   try {
     const token = await getToken();
+
     if (token) {
-      // Notify server of logout
       await apiRequest('/auth/logout', {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: 'Bearer ' + token,
         },
       });
     }
-  } catch (error) {
-    console.error('Logout error:', error);
   } finally {
-    // Remove tokens from device regardless of server response
     await removeToken();
   }
 }
 
-/**
- * Refresh access token using refresh token
- */
 export async function refreshAccessToken(): Promise<AuthResponse | null> {
   try {
     const refreshToken = await getRefreshToken();
+
     if (!refreshToken) {
       return null;
     }
@@ -113,34 +84,29 @@ export async function refreshAccessToken(): Promise<AuthResponse | null> {
       body: { refreshToken },
     });
 
-    // Store new tokens
     await storeToken(response.token);
     await storeRefreshToken(response.refreshToken);
 
     return response;
   } catch (error) {
     console.error('Token refresh error:', error);
-    // If refresh fails, clear tokens
     await removeToken();
     return null;
   }
 }
 
-/**
- * Check if user is authenticated
- */
 export async function isAuthenticated(): Promise<boolean> {
   try {
     const token = await getToken();
+
     if (!token) {
       return false;
     }
 
-    // Verify token with server
     await apiRequest('/auth/verify', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${token}`,
+        Authorization: 'Bearer ' + token,
       },
     });
 
@@ -151,12 +117,10 @@ export async function isAuthenticated(): Promise<boolean> {
   }
 }
 
-/**
- * Get current user profile
- */
-export async function getCurrentUser(): Promise<any> {
+export async function getCurrentUser(): Promise<unknown> {
   try {
     const token = await getToken();
+
     if (!token) {
       return null;
     }
@@ -164,7 +128,7 @@ export async function getCurrentUser(): Promise<any> {
     return await apiRequest('/auth/me', {
       method: 'GET',
       headers: {
-        Authorization: `Bearer ${token}`,
+        Authorization: 'Bearer ' + token,
       },
     });
   } catch (error) {
@@ -173,25 +137,18 @@ export async function getCurrentUser(): Promise<any> {
   }
 }
 
-/**
- * Update user profile
- */
-export async function updateProfile(data: any): Promise<any> {
-  try {
-    const token = await getToken();
-    if (!token) {
-      throw new Error('No authentication token found');
-    }
+export async function updateProfile(data: unknown): Promise<unknown> {
+  const token = await getToken();
 
-    return await apiRequest('/auth/profile', {
-      method: 'PUT',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      body: data,
-    });
-  } catch (error) {
-    console.error('Error updating profile:', error);
-    throw error;
+  if (!token) {
+    throw new Error('No authentication token found');
   }
+
+  return apiRequest('/auth/profile', {
+    method: 'PUT',
+    headers: {
+      Authorization: 'Bearer ' + token,
+    },
+    body: data,
+  });
 }
