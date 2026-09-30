@@ -1,0 +1,80 @@
+// VBeats backend data model.
+// Canonical storage uses one field name; the API serializes BOTH the demo
+// names (desc, dur, date) and the mobile-app names (description, duration,
+// createdAt) so both clients work unchanged.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String         @id @default(cuid())
+  email        String         @unique
+  username     String         @unique
+  passwordHash String
+  wallet       String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  beats        Beat[]
+  refreshTokens RefreshToken[]
+  purchases    Transaction[]  @relation("Buyer")
+  sales        Transaction[]  @relation("Seller")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Beat {
+  id          String   @id @default(cuid())
+  title       String
+  genre       String
+  bpm         Int?
+  musicalKey  String?
+  price       Float
+  description String?
+  durationSec Int      @default(0)
+  audioUrl    String?
+  imageUrl    String?
+  fingerprint String?  @unique
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  transactions Transaction[]
+
+  @@index([userId])
+  @@index([genre])
+}
+
+model Transaction {
+  id              String   @id @default(cuid())
+  beatId          String
+  beat            Beat     @relation(fields: [beatId], references: [id], onDelete: Cascade)
+  buyerId         String
+  buyer           User     @relation("Buyer", fields: [buyerId], references: [id])
+  sellerId        String
+  seller          User     @relation("Seller", fields: [sellerId], references: [id])
+  amount          Float
+  currency        String   @default("usd")
+  type            String   @default("license") // license | purchase
+  status          String   @default("completed")
+  stripePaymentId String?
+  createdAt       DateTime @default(now())
+
+  @@index([buyerId])
+  @@index([sellerId])
+  @@index([beatId])
+}

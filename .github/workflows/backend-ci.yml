@@ -1,0 +1,51 @@
+name: backend-ci
+
+on:
+  push:
+    branches: [scaffold/hardhat-node-express, main]
+    paths:
+      - 'backend/**'
+      - 'contracts/**'
+      - '.github/workflows/backend-ci.yml'
+  pull_request:
+    paths:
+      - 'backend/**'
+      - 'contracts/**'
+      - '.github/workflows/backend-ci.yml'
+
+jobs:
+  backend:
+    name: backend (typecheck + prisma)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npx prisma validate
+      - run: npx prisma generate
+      - run: npm run typecheck
+
+  contracts:
+    name: contracts (compile + test)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: contracts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: contracts/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npx hardhat compile
+      - run: npx hardhat test
