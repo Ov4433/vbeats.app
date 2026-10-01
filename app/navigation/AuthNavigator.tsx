@@ -1,4 +1,3 @@
-import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import LoginScreen from '../screens/LoginScreen';
 import SignupScreen from '../screens/SignupScreen';
@@ -10,8 +9,6 @@ export default function AuthNavigator() {
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
-        animationEnabled: true,
-        cardStyle: { backgroundColor: '#000' },
       }}
     >
       <Stack.Screen name="Login" component={LoginScreen} />

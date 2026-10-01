@@ -1,4 +1,3 @@
-import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import BottomTabNavigator from './BottomTabNavigator';
 import RecordBeatScreen from '../screens/RecordBeatScreen';
@@ -11,8 +10,6 @@ export default function AppNavigator() {
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
-        animationEnabled: true,
-        cardStyle: { backgroundColor: '#000' },
       }}
     >
       <Stack.Screen name="MainTabs" component={BottomTabNavigator} />

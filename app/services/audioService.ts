@@ -25,12 +25,14 @@ let sound: Audio.Sound | null = null;
  */
 export async function initializeAudio(): Promise<void> {
   try {
+    const { InterruptionModeIOS, InterruptionModeAndroid } = await import('expo-av');
+
     await Audio.setAudioModeAsync({
       allowsRecordingIOS: true,
       playsInSilentModeIOS: true,
       staysActiveInBackground: true,
-      interruptionModeIOS: Audio.InterruptionModeIOS.DoNotMix,
-      interruptionModeAndroid: Audio.InterruptionModeAndroid.DoNotMix,
+      interruptionModeIOS: InterruptionModeIOS.DoNotMix,
+      interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
       shouldDuckAndroid: true,
       playThroughEarpieceAndroid: false,
     });
