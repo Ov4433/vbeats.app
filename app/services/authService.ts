@@ -7,6 +7,13 @@ import {
   removeToken,
 } from './tokenService';
 
+export interface User {
+  id: string;
+  email: string;
+  username: string;
+  wallet?: string;
+}
+
 interface LoginPayload {
   email: string;
   password: string;
@@ -22,12 +29,7 @@ interface SignupPayload {
 interface AuthResponse {
   token: string;
   refreshToken: string;
-  user: {
-    id: string;
-    email: string;
-    username: string;
-    wallet?: string;
-  };
+  user: User;
 }
 
 export async function login(payload: LoginPayload): Promise<AuthResponse> {
@@ -117,7 +119,7 @@ export async function isAuthenticated(): Promise<boolean> {
   }
 }
 
-export async function getCurrentUser(): Promise<unknown> {
+export async function getCurrentUser(): Promise<User | null> {
   try {
     const token = await getToken();
 
@@ -125,12 +127,14 @@ export async function getCurrentUser(): Promise<unknown> {
       return null;
     }
 
-    return await apiRequest('/auth/me', {
+    const response = await apiRequest<User>('/auth/me', {
       method: 'GET',
       headers: {
         Authorization: 'Bearer ' + token,
       },
     });
+
+    return response;
   } catch (error) {
     console.error('Error fetching current user:', error);
     return null;
