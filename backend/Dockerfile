@@ -28,6 +28,12 @@ ENV NODE_ENV=production \
     PORT=4000 \
     UPLOAD_DIR=/app/backend/uploads \
     BRAND_DIR=/app/brand
+# Prisma's schema/migration engines need OpenSSL at runtime; node:20-slim
+# does not ship it (without this, `prisma migrate deploy` dies with an
+# empty "Schema engine error" on startup).
+RUN apt-get update -y \
+  && apt-get install -y --no-install-recommends openssl ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
 # Full node_modules (incl. prisma CLI for `migrate deploy` on startup).
 COPY --from=build /app/backend/node_modules ./node_modules
 COPY --from=build /app/backend/dist ./dist
