@@ -3,7 +3,6 @@
 
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
-import { Platform } from 'react-native';
 
 export interface RecordingStatus {
   isRecording: boolean;
@@ -26,12 +25,14 @@ let sound: Audio.Sound | null = null;
  */
 export async function initializeAudio(): Promise<void> {
   try {
+    const { InterruptionModeIOS, InterruptionModeAndroid } = await import('expo-av');
+
     await Audio.setAudioModeAsync({
       allowsRecordingIOS: true,
       playsInSilentModeIOS: true,
       staysActiveInBackground: true,
-      interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,
-      interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
+      interruptionModeIOS: InterruptionModeIOS.DoNotMix,
+      interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
       shouldDuckAndroid: true,
       playThroughEarpieceAndroid: false,
     });
@@ -88,7 +89,7 @@ export async function stopRecording(): Promise<AudioFile> {
     return {
       uri,
       duration: status.durationMillis || 0,
-      size: fileInfo.size || 0,
+      size: fileInfo.exists && 'size' in fileInfo ? fileInfo.size || 0 : 0,
       mimeType: 'audio/m4a',
     };
   } catch (error) {

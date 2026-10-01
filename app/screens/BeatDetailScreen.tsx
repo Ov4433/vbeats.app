@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -14,15 +14,21 @@ import Button from '../components/Button';
 
 export default function BeatDetailScreen({ route, navigation }: any) {
   const { beatId } = route.params;
-  const { fetchBeat, currentBeat, loading, update, remove } = useBeats();
+  const { fetchBeat, currentBeat, loading, remove } = useBeats();
   const recorder = useAudioRecorder();
   const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
-    fetchBeat(beatId);
-    recorder.initialize();
-    return () => recorder.cleanup();
-  }, [beatId]);
+    const loadBeat = async () => {
+      await fetchBeat(beatId);
+    };
+
+    void loadBeat();
+    void recorder.initialize();
+    return () => {
+      void recorder.cleanup();
+    };
+  }, [beatId, fetchBeat, recorder]);
 
   const handlePlayBeat = async () => {
     if (currentBeat) {

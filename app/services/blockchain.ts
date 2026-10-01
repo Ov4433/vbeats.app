@@ -33,7 +33,7 @@ export async function getNetworkInfo() {
   return {
     chainId: network.chainId,
     name: network.name,
-    ensAddress: network.ensAddress,
+    ensAddress: 'ensAddress' in network ? network.ensAddress : undefined,
   };
 }
 
