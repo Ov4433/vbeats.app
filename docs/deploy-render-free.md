@@ -18,11 +18,19 @@ https://vbeats-api.onrender.com
 - Render's own free Postgres expires, which is why the database lives on
   **Neon** (free tier, no expiry).
 
-## 1. Free Postgres (Neon) — ~5 min
+## 1. Free Postgres — ~5 min (pick one)
 
-1. Sign up at [neon.tech](https://neon.tech) (free, no credit card).
-2. Create a project and database.
-3. Copy the **connection string** (it starts with `postgresql://`).
+**Option A — Render Postgres (easiest, same dashboard):** Render dashboard
+→ New → PostgreSQL → create it (free tier; check your Render billing page
+for the current free-DB duration — it expires, so this is best for
+testing). Copy the **External Database URL**.
+
+**Option B — Neon (free tier, no expiry):** sign up at
+[neon.tech](https://neon.tech) (free, no credit card), create a project +
+database, copy the connection string.
+
+Either way, keep the connection string handy — it goes into the Blueprint
+as `DATABASE_URL` in the next step.
 
 ## 2. Deploy the API (Render) — ~10 min
 

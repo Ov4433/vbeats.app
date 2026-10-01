@@ -1,10 +1,14 @@
 # VBeats API — free Render blueprint.
 #
-# Pair with a free Neon Postgres database (Render's own free Postgres
-# expires, Neon's free tier does not).
+# Database options (pick one):
+#   A. Render Postgres (easiest — same dashboard; free tier expires, check
+#      your Render billing page for the current free-DB duration).
+#   B. Neon Postgres (neon.tech — free tier, no expiry).
+# Either way, paste the connection string as DATABASE_URL when Render
+# prompts for it during Blueprint deploy. Never commit the real value.
 #
 # Deploy: in the Render dashboard choose New > Blueprint and select the
-# Ov4433/vbeats.app repo. Fill in DATABASE_URL from Neon; JWT_SECRET is
+# Ov4433/vbeats.app repo. Fill in DATABASE_URL; JWT_SECRET is
 # auto-generated. Everything else can stay blank until you go live with
 # Stripe / on-chain verification.
 
