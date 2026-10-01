@@ -1,0 +1,10 @@
+# Used when building with backend/ as the context directly.
+node_modules
+dist
+npm-debug.log
+.env
+.env.*
+!.env.example
+coverage
+*.tsbuildinfo
+uploads

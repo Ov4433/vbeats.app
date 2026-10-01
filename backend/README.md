@@ -29,6 +29,34 @@ npm run prisma:deploy
 npm start
 ```
 
+## Run with Docker
+
+From the repo root — spins up PostgreSQL 16 plus the API (migrations run
+automatically on startup):
+
+```bash
+docker compose up --build
+```
+
+API: `http://localhost:4000` (routes under `/v1`, health at `/health`).
+
+Useful extras:
+
+```bash
+docker compose up --build -d          # run in the background
+docker compose logs -f api            # follow the API logs
+docker compose exec api npm run seed  # load the 3 demo beats
+docker compose down                   # stop everything
+docker compose down -v                # also wipe the database + uploads
+```
+
+For anything beyond local dev, set a real JWT secret (the default is a
+placeholder):
+
+```bash
+JWT_SECRET=$(openssl rand -hex 48) docker compose up --build
+```
+
 ## API overview
 
 Auth (`POST /v1/auth/...`): `signup {email,password,username|name,wallet?}`,

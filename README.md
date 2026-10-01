@@ -35,6 +35,10 @@ vbeats.app/
 └── setup.sh                 # Setup script
 ```
 
+The backend API lives in `backend/` (Express + Prisma + PostgreSQL) with its
+own README — quickest way to run it: `docker compose up --build` from here
+(see "Run with Docker" in `backend/README.md`).
+
 ## 🚀 Quick Start
 
 ### Prerequisites

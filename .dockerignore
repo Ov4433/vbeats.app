@@ -1,0 +1,36 @@
+# Build context for backend/Dockerfile (built from the repo root).
+# Keep the context small — the API image only needs backend/ + brand/.
+
+.git
+.gitignore
+
+# Mobile app sources (not part of the API image)
+node_modules
+app
+assets
+components
+features
+hooks
+navigation
+screens
+services
+utils
+
+# Backend build outputs / secrets
+backend/node_modules
+backend/dist
+backend/uploads
+backend/coverage
+backend/*.tsbuildinfo
+backend/.env
+backend/.env.*
+
+# Contracts build outputs (covered by their own workflow)
+contracts/node_modules
+contracts/artifacts
+contracts/cache
+contracts/typechain-types
+
+# Misc
+*.log
+.DS_Store

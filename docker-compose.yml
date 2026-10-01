@@ -1,0 +1,48 @@
+# VBeats local stack: PostgreSQL 16 + the Express API.
+# Usage:  docker compose up --build
+# API:    http://localhost:4000  (routes under /v1, health at /health)
+
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: vbeats
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d vbeats"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "4000:4000"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/vbeats
+      # Set a real secret in production:  JWT_SECRET=$(openssl rand -hex 48) docker compose up
+      JWT_SECRET: ${JWT_SECRET:-dev-only-secret-change-me}
+      API_BASE_URL: http://localhost:4000
+      CORS_ORIGINS: http://localhost:19006,http://localhost:8081
+    volumes:
+      - uploads:/app/backend/uploads
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:4000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  pgdata:
+  uploads:
