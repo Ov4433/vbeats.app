@@ -17,7 +17,7 @@
       "distribution": "internal",
       "channel": "preview",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://preview-api.vbeats.app",
+        "EXPO_PUBLIC_API_URL": "https://vbeats-api.onrender.com",
         "EXPO_PUBLIC_BLOCKCHAIN_RPC": "https://sepolia.base.org"
       }
     },
@@ -25,7 +25,7 @@
       "distribution": "store",
       "channel": "production",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://api.vbeats.app",
+        "EXPO_PUBLIC_API_URL": "https://vbeats-api.onrender.com",
         "EXPO_PUBLIC_BLOCKCHAIN_RPC": "https://mainnet.base.org"
       }
     }

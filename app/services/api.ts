@@ -1,7 +1,7 @@
 import { getToken, isTokenExpired } from './tokenService';
 import { refreshAccessToken } from './authService';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://api.vbeats.app';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://vbeats-api.onrender.com';
 const API_VERSION = 'v1';
 const API_ENDPOINT = `${API_BASE_URL}/${API_VERSION}`;
 
