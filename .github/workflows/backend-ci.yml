@@ -20,6 +20,10 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    env:
+      # prisma validate/generate only parse the schema, they never connect,
+      # but the datasource url = env("DATABASE_URL") must exist to parse.
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/vbeats_ci
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -46,6 +50,8 @@ jobs:
           cache: npm
           cache-dependency-path: contracts/package-lock.json
       - run: npm ci
-      - run: npm run typecheck
+      # compile before typecheck: tests import from typechain-types/,
+      # which only exists after hardhat generates it
       - run: npx hardhat compile
+      - run: npm run typecheck
       - run: npx hardhat test
