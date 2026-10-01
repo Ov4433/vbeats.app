@@ -1,0 +1,41 @@
+# VBeats API — free Render blueprint.
+#
+# Pair with a free Neon Postgres database (Render's own free Postgres
+# expires, Neon's free tier does not).
+#
+# Deploy: in the Render dashboard choose New > Blueprint and select the
+# Ov4433/vbeats.app repo. Fill in DATABASE_URL from Neon; JWT_SECRET is
+# auto-generated. Everything else can stay blank until you go live with
+# Stripe / on-chain verification.
+
+services:
+  - type: web
+    name: vbeats-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false # paste your Neon connection string in the dashboard
+      - key: JWT_SECRET
+        generateValue: true # Render generates a random secret
+      - key: JWT_ACCESS_TTL
+        value: 15m
+      - key: JWT_REFRESH_TTL_DAYS
+        value: 30
+      - key: CORS_ORIGINS
+        value: https://vbeats-api.onrender.com # adjust if you rename the service
+      - key: MAX_UPLOAD_MB
+        value: 50
+      - key: STRIPE_SECRET_KEY
+        sync: false # leave blank until you wire up real payments
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: RPC_URL
+        sync: false # leave blank until you wire up on-chain verification
+      - key: BEAT_REGISTRY_ADDRESS
+        sync: false
