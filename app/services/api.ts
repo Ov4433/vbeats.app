@@ -5,11 +5,34 @@ const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://api.vbeats.app'
 const API_VERSION = 'v1';
 const API_ENDPOINT = `${API_BASE_URL}/${API_VERSION}`;
 
+/**
+ * The API returns relative asset paths (e.g. `/uploads/abc.m4a`).
+ * Resolve them against the API host before playback or <Image>.
+ */
+export function resolveMediaUrl(
+  url: string | null | undefined
+): string | null {
+  if (!url) return null;
+  if (/^https?:\/\//i.test(url)) return url;
+  return `${API_BASE_URL}${url.startsWith('/') ? url : '/' + url}`;
+}
+
 interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
   headers?: Record<string, string>;
   body?: unknown;
   requiresAuth?: boolean;
+}
+
+async function authHeaders(): Promise<Record<string, string>> {
+  let token = await getToken();
+
+  if (token && isTokenExpired(token)) {
+    const refreshed = await refreshAccessToken();
+    token = refreshed?.token ?? null;
+  }
+
+  return token ? { Authorization: 'Bearer ' + token } : {};
 }
 
 export async function apiRequest<T>(
@@ -18,20 +41,10 @@ export async function apiRequest<T>(
 ): Promise<T> {
   const { method = 'GET', headers = {}, body, requiresAuth = false } = options;
 
-  let token: string | null = null;
   const finalHeaders: Record<string, string> = { ...headers };
 
   if (requiresAuth) {
-    token = await getToken();
-
-    if (token && isTokenExpired(token)) {
-      const refreshed = await refreshAccessToken();
-      token = refreshed?.token ?? null;
-    }
-
-    if (token) {
-      finalHeaders.Authorization = 'Bearer ' + token;
-    }
+    Object.assign(finalHeaders, await authHeaders());
   }
 
   finalHeaders['Content-Type'] = 'application/json';
@@ -40,6 +53,40 @@ export async function apiRequest<T>(
     method,
     headers: finalHeaders,
     body: body ? JSON.stringify(body) : undefined,
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error('Unauthorized - Please login again');
+    }
+
+    throw new Error(`API Error: ${response.status} ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Multipart upload (e.g. beat audio). Unlike apiRequest, this does NOT set
+ * a JSON Content-Type — fetch sets the multipart boundary automatically.
+ */
+export async function apiUpload<T>(
+  endpoint: string,
+  formData: FormData,
+  options: { headers?: Record<string, string>; requiresAuth?: boolean } = {}
+): Promise<T> {
+  const { headers = {}, requiresAuth = false } = options;
+
+  const finalHeaders: Record<string, string> = { ...headers };
+
+  if (requiresAuth) {
+    Object.assign(finalHeaders, await authHeaders());
+  }
+
+  const response = await fetch(`${API_ENDPOINT}${endpoint}`, {
+    method: 'POST',
+    headers: finalHeaders,
+    body: formData,
   });
 
   if (!response.ok) {

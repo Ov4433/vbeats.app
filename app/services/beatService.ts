@@ -1,8 +1,7 @@
 // Beat Service for VbeatS
 // Handles beat creation, upload, and management
 
-import { apiRequest } from './api';
-import * as FileSystem from 'expo-file-system';
+import { apiRequest, apiUpload, resolveMediaUrl } from './api';
 
 export interface Beat {
   id: string;
@@ -28,32 +27,47 @@ export interface BeatCreatePayload {
 }
 
 /**
- * Create new beat
+ * Resolve relative asset paths from the API (e.g. `/uploads/abc.m4a`)
+ * against the API host so they play/render directly.
+ */
+function normalizeBeat(beat: Beat): Beat {
+  return {
+    ...beat,
+    audioUrl: resolveMediaUrl(beat.audioUrl) ?? beat.audioUrl,
+    imageUrl: resolveMediaUrl(beat.imageUrl) ?? undefined,
+  };
+}
+
+/**
+ * Create new beat — multipart upload to POST /v1/beats/upload.
+ * The backend stores the file, computes the SHA-256 fingerprint, and
+ * creates the beat record in one step.
  */
 export async function createBeat(
   payload: BeatCreatePayload,
   audioFileUri: string
 ): Promise<Beat> {
   try {
-    // Read audio file as base64
-    const audioBase64 = await FileSystem.readAsStringAsync(audioFileUri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
+    const formData = new FormData();
+    formData.append('title', payload.title);
+    if (payload.description) {
+      formData.append('description', payload.description);
+    }
+    formData.append('genre', payload.genre);
+    if (payload.bpm !== undefined) {
+      formData.append('bpm', String(payload.bpm));
+    }
+    formData.append('price', String(payload.price));
+    formData.append('audio', {
+      uri: audioFileUri,
+      name: `${payload.title}.m4a`,
+      type: 'audio/m4a',
+    } as unknown as Blob);
 
-    const beatData = {
-      ...payload,
-      audio: {
-        data: audioBase64,
-        mimeType: 'audio/m4a',
-        name: `${payload.title}.m4a`,
-      },
-    };
-
-    return await apiRequest('/beats', {
-      method: 'POST',
-      body: beatData,
+    const beat = await apiUpload<Beat>('/beats/upload', formData, {
       requiresAuth: true,
     });
+    return normalizeBeat(beat);
   } catch (error) {
     console.error('Failed to create beat:', error);
     throw error;
@@ -65,9 +79,10 @@ export async function createBeat(
  */
 export async function getUserBeats(): Promise<Beat[]> {
   try {
-    return await apiRequest('/beats/user', {
+    const res = await apiRequest<{ beats: Beat[] }>('/beats/user', {
       requiresAuth: true,
     });
+    return res.beats.map(normalizeBeat);
   } catch (error) {
     console.error('Failed to fetch user beats:', error);
     throw error;
@@ -79,9 +94,10 @@ export async function getUserBeats(): Promise<Beat[]> {
  */
 export async function getBeatById(beatId: string): Promise<Beat> {
   try {
-    return await apiRequest(`/beats/${beatId}`, {
+    const beat = await apiRequest<Beat>(`/beats/${beatId}`, {
       requiresAuth: true,
     });
+    return normalizeBeat(beat);
   } catch (error) {
     console.error('Failed to fetch beat:', error);
     throw error;
@@ -96,11 +112,12 @@ export async function updateBeat(
   payload: Partial<BeatCreatePayload>
 ): Promise<Beat> {
   try {
-    return await apiRequest(`/beats/${beatId}`, {
+    const beat = await apiRequest<Beat>(`/beats/${beatId}`, {
       method: 'PUT',
       body: payload,
       requiresAuth: true,
     });
+    return normalizeBeat(beat);
   } catch (error) {
     console.error('Failed to update beat:', error);
     throw error;
@@ -140,7 +157,12 @@ export async function getMarketplaceBeats(
     if (filters?.minPrice) params.append('minPrice', String(filters.minPrice));
     if (filters?.maxPrice) params.append('maxPrice', String(filters.maxPrice));
 
-    return await apiRequest(`/beats/marketplace?${params.toString()}`);
+    const res = await apiRequest<{
+      beats: Beat[];
+      total: number;
+      page: number;
+    }>(`/beats/marketplace?${params.toString()}`);
+    return { ...res, beats: res.beats.map(normalizeBeat) };
   } catch (error) {
     console.error('Failed to fetch marketplace beats:', error);
     throw error;
@@ -152,10 +174,11 @@ export async function getMarketplaceBeats(
  */
 export async function searchBeats(query: string): Promise<Beat[]> {
   try {
-    return await apiRequest(
+    const res = await apiRequest<{ beats: Beat[] }>(
       `/beats/search?q=${encodeURIComponent(query)}`,
       { requiresAuth: true }
     );
+    return res.beats.map(normalizeBeat);
   } catch (error) {
     console.error('Failed to search beats:', error);
     throw error;

@@ -40,6 +40,9 @@ docker compose up --build
 
 API: `http://localhost:4000` (routes under `/v1`, health at `/health`).
 
+Point the Expo app at it (a physical phone needs your LAN IP, not
+localhost) — see `EXPO_PUBLIC_API_URL` in the repo-root `.env.example`.
+
 Useful extras:
 
 ```bash

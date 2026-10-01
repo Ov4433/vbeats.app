@@ -144,7 +144,7 @@ export async function updateProfile(data: unknown): Promise<unknown> {
     throw new Error('No authentication token found');
   }
 
-  return apiRequest('/auth/profile', {
+  return apiRequest('/users/profile', {
     method: 'PUT',
     headers: {
       Authorization: 'Bearer ' + token,
