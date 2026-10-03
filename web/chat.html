@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chat — Verified Beats Studio</title>
+<link rel="icon" href="assets/logo.png">
+<link rel="stylesheet" href="css/style.css">
+<style>
+  .chat-box { height: 420px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 18px; }
+  .msg { max-width: 80%; }
+  .msg .who { font-size: 12px; color: var(--mut); margin-bottom: 3px; font-weight: 600; }
+  .msg .bubble { background: var(--panel2); border: 1px solid var(--line); border-radius: 4px 14px 14px 14px; padding: 9px 13px; font-size: 15px; overflow-wrap: anywhere; }
+  .msg.mine { align-self: flex-end; text-align: right; }
+  .msg.mine .bubble { background: linear-gradient(135deg, rgba(150,60,255,.25), rgba(255,61,154,.22)); border-radius: 14px 4px 14px 14px; }
+  .chat-input { display: flex; gap: 10px; margin-top: 12px; }
+  .chat-input input { flex: 1; }
+</style>
+</head>
+<body>
+<nav class="nav" id="nav"></nav>
+<main class="wrap" style="max-width:720px">
+  <div class="page-head"><div><h1>The Booth</h1><p>Studio chat — talk beats, collabs, drops.</p></div></div>
+
+  <div class="mascot-says">
+    <img src="assets/mascot-profile.webp" alt="">
+    <div class="bubble">🦇 The booth is open. <b>Keep it about the music</b> — I bite spammers.</div>
+  </div>
+
+  <div class="card chat-box" id="box"><p class="note">Loading…</p></div>
+  <div id="chat-err"></div>
+
+  <div id="composer">
+    <div class="chat-input">
+      <input id="msg" maxlength="500" placeholder="Say something…" autocomplete="off">
+      <button class="btn" id="send">Send</button>
+    </div>
+    <p class="note" id="signin-note" style="display:none">You need to <a href="upload.html" style="color:var(--pur)">sign in</a> to chat.</p>
+  </div>
+</main>
+<footer class="footer"><div class="footer-bat"><img src="assets/mascot-profile.webp" alt=""></div>Verified Beats Studio — the bat keeps the receipts.</footer>
+<script src="js/api.js"></script>
+<script>
+nav('chat.html');
+const $ = id => document.getElementById(id);
+const box = $('box');
+let lastId = null, myName = null;
+
+api.chat = {
+  list: (params = {}) => {
+    const q = new URLSearchParams(params);
+    return api.get('/v1/chat?' + q.toString());
+  },
+  post: (body) => api.req('/v1/chat', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ body }),
+  }),
+};
+
+function render(msgs, append) {
+  if (!append) box.innerHTML = '';
+  if (!msgs.length && !append) { box.innerHTML = '<p class="note">No messages yet — start the cypher.</p>'; return; }
+  for (const m of msgs) {
+    const div = document.createElement('div');
+    div.className = 'msg' + (myName && m.username === myName ? ' mine' : '');
+    div.innerHTML = `<div class="who">${esc(m.username)}</div><div class="bubble">${esc(m.body)}</div>`;
+    box.appendChild(div);
+  }
+  box.scrollTop = box.scrollHeight;
+}
+
+async function loadInitial() {
+  try {
+    const d = await api.chat.list({ limit: 50 });
+    render(d.messages || [], false);
+    const ms = d.messages || [];
+    if (ms.length) lastId = ms[ms.length - 1].id;
+  } catch (e) { box.innerHTML = '<p class="note">Chat is waking up — try again in a few seconds.</p>'; }
+}
+
+async function poll() {
+  try {
+    const d = await api.chat.list({ limit: 50 });
+    const msgs = d.messages || [];
+    if (!msgs.length) return;
+    const ids = new Set(msgs.map(m => m.id));
+    if (lastId && ids.has(lastId)) {
+      const fresh = msgs.slice(msgs.findIndex(m => m.id === lastId) + 1);
+      if (fresh.length) { render(fresh, true); lastId = msgs[msgs.length - 1].id; }
+    } else if (!lastId) {
+      render(msgs, false); lastId = msgs[msgs.length - 1].id;
+    }
+  } catch { /* keep polling */ }
+}
+
+async function send() {
+  const body = $('msg').value.trim();
+  if (!body) return;
+  if (!api.loggedIn()) { $('signin-note').style.display = ''; return; }
+  try {
+    $('send').disabled = true;
+    const m = await api.chat.post(body);
+    $('msg').value = '';
+    myName = myName || m.username;
+    render([m], true);
+    lastId = m.id;
+  } catch (e) { showErr('chat-err', e.message); }
+  finally { $('send').disabled = false; }
+}
+
+$('send').onclick = send;
+$('msg').onkeydown = e => { if (e.key === 'Enter') send(); };
+if (!api.loggedIn()) $('signin-note').style.display = '';
+
+loadInitial();
+setInterval(poll, 4000);
+</script>
+</body>
+</html>

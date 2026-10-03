@@ -25,6 +25,17 @@ model User {
   refreshTokens RefreshToken[]
   purchases    Transaction[]  @relation("Buyer")
   sales        Transaction[]  @relation("Seller")
+  chatMessages ChatMessage[]
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  body      String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
 }
 
 model RefreshToken {

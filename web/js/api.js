@@ -71,7 +71,7 @@ const api = {
 function nav(active) {
   const links = [
     ['index.html', 'Home'], ['marketplace.html', 'Marketplace'],
-    ['studio.html', 'Studio'], ['upload.html', 'Upload'],
+    ['studio.html', 'Studio'], ['chat.html', 'Chat'], ['upload.html', 'Upload'],
   ];
   const el = document.getElementById('nav');
   el.innerHTML =

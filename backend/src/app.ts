@@ -12,6 +12,7 @@ import brandRoutes from './routes/brand';
 import usersRoutes from './routes/users';
 import transactionsRoutes from './routes/transactions';
 import webhooksRoutes from './routes/webhooks';
+import chatRoutes from './routes/chat';
 
 export function createApp() {
   const app = express();
@@ -49,6 +50,7 @@ export function createApp() {
   app.use('/v1/users', usersRoutes);
   app.use('/v1/transactions', transactionsRoutes);
   app.use('/v1/webhooks', webhooksRoutes);
+  app.use('/v1/chat', chatRoutes);
 
   app.use(notFound);
   app.use(errorHandler);
