@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Verified Beats Studio</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<nav class="nav" id="nav"></nav>
+
+<header class="hero wrap">
+  <img class="logo" src="assets/logo.png" alt="Verified Beats Studio logo">
+  <h1>Verified <span>Beats</span> Studio</h1>
+  <p>The marketplace where every beat is fingerprinted, verified, and provably yours — on-chain provenance for producers.</p>
+  <div class="hero-cta">
+    <a class="btn" href="marketplace.html">Browse beats</a>
+    <a class="btn ghost" href="studio.html">Open the studio</a>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="feats">
+    <div class="feat"><div class="ic">🔒</div><h3>On-chain provenance</h3><p>Every upload gets a SHA-256 fingerprint registered on Base. Anyone can verify a beat's origin in one click.</p></div>
+    <div class="feat"><div class="ic">🎙️</div><h3>Browser studio</h3><p>Record straight from your mic, watch the levels, name it, and publish — no app install.</p></div>
+    <div class="feat"><div class="ic">⚡</div><h3>Instant delivery</h3><p>Uploads go live immediately with streaming previews for buyers.</p></div>
+  </div>
+
+  <div class="mascot-band">
+    <img src="assets/mascot.webp" alt="Studio mascot">
+    <div>
+      <h2>Built for producers</h2>
+      <p>Upload a beat, get a cryptographic fingerprint, and prove it's yours forever. Verified Beats Studio keeps the receipt — on-chain.</p>
+      <p style="margin-top:14px"><a class="btn small" href="upload.html">Upload your first beat</a></p>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:60px">
+    <h2 style="margin-bottom:10px">Latest drops</h2>
+    <p class="note" style="margin-bottom:16px">Live from the marketplace API.</p>
+    <div class="grid" id="latest"></div>
+  </div>
+</main>
+
+<footer class="footer">Verified Beats Studio — fingerprinted, verified, yours.</footer>
+
+<script src="js/api.js"></script>
+<script>
+nav('index.html');
+api.marketplace({ limit: 4 }).then(d => {
+  const beats = d.beats || [];
+  document.getElementById('latest').innerHTML = beats.length
+    ? beats.map(beatCard).join('')
+    : '<p class="note">No beats yet — be the first to upload.</p>';
+}).catch(() => {
+  document.getElementById('latest').innerHTML = '<p class="note">Marketplace is waking up (free tier cold start) — try again in a few seconds.</p>';
+});
+
+let currentAudio = null;
+function beatCard(b) {
+  return `<div class="beat-card" onclick="location.href='beat.html?id=${esc(b.id)}'">
+    <img class="beat-art" src="${esc(api.artUrl(b))}" alt="" loading="lazy">
+    <div class="beat-body">
+      <div class="beat-title">${esc(b.title)}</div>
+      <div class="beat-sub">${esc(b.genre)}${b.bpm ? ' · ' + esc(b.bpm) + ' BPM' : ''}${b.duration || b.dur ? ' · ' + fmtDur(b.duration || b.dur) : ''}</div>
+      <div class="beat-meta"><span class="price">$${esc(b.price)}</span></div>
+      <div class="play-row">
+        <button class="play-btn" onclick="event.stopPropagation();togglePlay(this,'${esc(api.mediaUrl(b))}')">▶</button>
+        <a class="btn small ghost" href="beat.html?id=${esc(b.id)}" onclick="event.stopPropagation()">Details</a>
+      </div>
+    </div></div>`;
+}
+function togglePlay(btn, url) {
+  if (!url) return;
+  if (currentAudio && !currentAudio.paused && currentAudio.dataset.url === url) {
+    currentAudio.pause(); btn.classList.remove('playing'); btn.textContent = '▶'; return;
+  }
+  if (currentAudio) { currentAudio.pause(); document.querySelectorAll('.play-btn.playing').forEach(x => { x.classList.remove('playing'); x.textContent = '▶'; }); }
+  currentAudio = new Audio(url); currentAudio.dataset.url = url;
+  currentAudio.play(); btn.classList.add('playing'); btn.textContent = '⏸';
+  currentAudio.onended = () => { btn.classList.remove('playing'); btn.textContent = '▶'; };
+}
+</script>
+</body>
+</html>

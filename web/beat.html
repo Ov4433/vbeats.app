@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Beat — Verified Beats Studio</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<nav class="nav" id="nav"></nav>
+<main class="wrap" style="max-width:720px">
+  <div id="err"></div>
+  <div id="beat"></div>
+</main>
+<footer class="footer">Verified Beats Studio</footer>
+<script src="js/api.js"></script>
+<script>
+nav('');
+const id = new URLSearchParams(location.search).get('id');
+
+async function load() {
+  if (!id) { showErr('err', 'No beat id given.'); return; }
+  try {
+    const b = await api.beat(id);
+    const v = await api.verify(id).catch(() => null);
+    // verify returns a flat shape: { verified, fingerprint, onChain, chainConfigured, chainOwner? }
+    const chain = v ? { onChain: v.onChain, configured: v.chainConfigured, owner: v.chainOwner } : null;
+    document.getElementById('beat').innerHTML = `
+      <div class="page-head"><div><h1>${esc(b.title)}</h1>
+        <p>${esc(b.genre)}${b.bpm ? ' · ' + esc(b.bpm) + ' BPM' : ''}${b.duration || b.dur ? ' · ' + fmtDur(b.duration || b.dur) : ''}</p></div>
+        <div class="price" style="font-size:24px">$${esc(b.price)}</div></div>
+      <img src="${esc(api.artUrl(b))}" alt="" style="width:100%;border-radius:16px;border:1px solid var(--line)">
+      <audio class="wide" controls src="${esc(api.mediaUrl(b))}"></audio>
+      ${b.description || b.desc ? `<div class="card" style="margin-top:16px"><p>${esc(b.description || b.desc)}</p></div>` : ''}
+      <div class="card" style="margin-top:16px">
+        <h3 style="margin-bottom:10px">🔒 Provenance</h3>
+        <p class="mono">${esc(b.fingerprint || 'no fingerprint recorded')}</p>
+        <p style="margin-top:10px" id="chainline">${chainBadge(chain)}</p>
+      </div>`;
+  } catch (e) { showErr('err', e.message); }
+}
+function chainBadge(c) {
+  if (!c) return '<span class="badge wait">On-chain status unknown</span>';
+  if (c.configured === false) return '<span class="badge wait">Not on-chain yet — contract not configured</span>';
+  if (c.onChain) return `<span class="badge ok">✓ Registered on-chain</span>
+    ${c.owner ? `<p class="note">Owner <span class="mono">${esc(c.owner)}</span></p>` : ''}
+    ${c.registeredAt ? `<p class="note">Registered ${esc(c.registeredAt)}</p>` : ''}`;
+  return '<span class="badge no">Fingerprint not registered on-chain</span>';
+}
+load();
+</script>
+</body>
+</html>

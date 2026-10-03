@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Upload — Verified Beats Studio</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<nav class="nav" id="nav"></nav>
+<main class="wrap" style="max-width:640px">
+  <div class="page-head"><div><h1>Upload</h1><p>Sign in, drop your audio, get fingerprinted on-chain.</p></div></div>
+
+  <div class="card" id="auth-card" style="margin-bottom:16px">
+    <h2 style="margin-bottom:6px" id="auth-title">Sign in</h2>
+    <div id="auth-err"></div>
+    <div class="field"><label>Email</label><input type="email" id="email" autocomplete="email"></div>
+    <div class="field"><label>Password</label><input type="password" id="pw" autocomplete="current-password"></div>
+    <div class="field" id="name-wrap" style="display:none"><label>Producer name</label><input id="name" autocomplete="nickname"></div>
+    <button class="btn" id="auth-go" style="width:100%">Sign in</button>
+    <p class="link note" style="text-align:center;margin-top:12px;cursor:pointer" id="auth-switch">New here? Create an account</p>
+  </div>
+
+  <div class="card" id="upload-card" style="display:none">
+    <h2 style="margin-bottom:6px">New beat</h2>
+    <div id="up-err"></div>
+    <div class="field"><label>Audio file (wav / mp3)</label><input type="file" id="audio" accept="audio/*"></div>
+    <div class="field"><label>Title</label><input id="title" placeholder="Midnight Drive"></div>
+    <div class="row2">
+      <div class="field"><label>Genre</label>
+        <select id="genre"><option>Trap</option><option>Hip-Hop</option><option>R&amp;B</option><option>Pop</option><option>Drill</option><option>Afrobeats</option><option>EDM</option><option>Other</option></select>
+      </div>
+      <div class="field"><label>BPM</label><input id="bpm" type="number" min="1" max="999" placeholder="140"></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Price (USD)</label><input id="price" type="number" min="0" step="0.01" value="19.99"></div>
+      <div class="field"><label>Key (optional)</label><input id="key" placeholder="Am" maxlength="16"></div>
+    </div>
+    <div class="field"><label>Description</label><textarea id="desc" rows="3" placeholder="Dark trap beat, heavy 808s…"></textarea></div>
+    <button class="btn" id="up-go" style="width:100%">Upload beat</button>
+    <p class="note">SHA-256 is computed server-side; with the relayer configured the fingerprint is registered on Base automatically.</p>
+    <div id="up-done"></div>
+  </div>
+</main>
+<footer class="footer">Verified Beats Studio</footer>
+<script src="js/api.js"></script>
+<script>
+nav('upload.html');
+let mode = 'login';
+const $ = id => document.getElementById(id);
+
+function refresh() {
+  const in_ = api.loggedIn();
+  $('auth-card').style.display = in_ ? 'none' : '';
+  $('upload-card').style.display = in_ ? '' : 'none';
+  renderUser();
+}
+$('auth-switch').onclick = () => {
+  mode = mode === 'login' ? 'signup' : 'login';
+  $('auth-title').textContent = mode === 'login' ? 'Sign in' : 'Create account';
+  $('auth-go').textContent = mode === 'login' ? 'Sign in' : 'Create account';
+  $('auth-switch').textContent = mode === 'login' ? 'New here? Create an account' : 'Have an account? Sign in';
+  $('name-wrap').style.display = mode === 'signup' ? '' : 'none';
+};
+$('auth-go').onclick = async () => {
+  try {
+    if (mode === 'login') await api.login($('email').value.trim(), $('pw').value);
+    else {
+      const n = $('name').value.trim();
+      if (!n) throw new Error('Producer name is required');
+      await api.signup($('email').value.trim(), $('pw').value, n);
+    }
+    refresh();
+  } catch (e) { showErr('auth-err', e.message); }
+};
+
+$('up-go').onclick = async () => {
+  const file = $('audio').files[0];
+  const title = $('title').value.trim(), genre = $('genre').value;
+  const price = parseFloat($('price').value);
+  try {
+    if (!file) throw new Error('Choose an audio file first.');
+    if (!title) throw new Error('Title is required.');
+    if (!(price >= 0)) throw new Error('Price must be a non-negative number.');
+    $('up-go').disabled = true; $('up-go').textContent = 'Uploading…';
+    const fd = new FormData();
+    fd.append('audio', file);
+    fd.append('title', title); fd.append('genre', genre);
+    fd.append('price', String(price));
+    if ($('bpm').value) fd.append('bpm', $('bpm').value);
+    if ($('key').value.trim()) fd.append('key', $('key').value.trim());
+    if ($('desc').value.trim()) fd.append('description', $('desc').value.trim());
+    const beat = await api.upload(fd);
+    $('up-done').innerHTML = `<div class="badge ok" style="margin-top:14px">✓ Uploaded &amp; fingerprinted</div>
+      <p class="note"><a href="beat.html?id=${esc(beat.id)}" style="color:var(--pur)">View your beat →</a></p>`;
+  } catch (e) { showErr('up-err', e.message); }
+  finally { $('up-go').disabled = false; $('up-go').textContent = 'Upload beat'; }
+};
+refresh();
+</script>
+</body>
+</html>

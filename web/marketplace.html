@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Marketplace — Verified Beats Studio</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<nav class="nav" id="nav"></nav>
+<main class="wrap">
+  <div class="page-head">
+    <div><h1>Marketplace</h1><p>Every beat fingerprinted &amp; verifiable on-chain.</p></div>
+  </div>
+  <div class="toolbar">
+    <input type="search" id="q" placeholder="Search beats…">
+    <select id="genre">
+      <option value="">All genres</option>
+      <option>Trap</option><option>Hip-Hop</option><option>R&amp;B</option>
+      <option>Pop</option><option>Drill</option><option>Afrobeats</option><option>EDM</option>
+    </select>
+    <button class="btn small" id="go">Search</button>
+  </div>
+  <div id="err"></div>
+  <div class="grid" id="grid"></div>
+  <p class="note" id="more-wrap" style="text-align:center;margin:24px 0;display:none">
+    <button class="btn ghost" id="more">Load more</button>
+  </p>
+</main>
+<footer class="footer">Verified Beats Studio</footer>
+<script src="js/api.js"></script>
+<script>
+nav('marketplace.html');
+let page = 1, currentAudio = null, lastParams = {};
+const grid = document.getElementById('grid');
+
+function card(b) {
+  return `<div class="beat-card">
+    <img class="beat-art" src="${esc(api.artUrl(b))}" alt="" loading="lazy" onclick="location.href='beat.html?id=${esc(b.id)}'">
+    <div class="beat-body">
+      <div class="beat-title" onclick="location.href='beat.html?id=${esc(b.id)}'">${esc(b.title)}</div>
+      <div class="beat-sub">${esc(b.genre)}${b.bpm ? ' · ' + esc(b.bpm) + ' BPM' : ''}${b.duration || b.dur ? ' · ' + fmtDur(b.duration || b.dur) : ''}</div>
+      <div class="beat-meta"><span class="price">$${esc(b.price)}</span></div>
+      <div class="play-row">
+        <button class="play-btn" data-url="${esc(api.mediaUrl(b))}">▶</button>
+        <a class="btn small ghost" href="beat.html?id=${esc(b.id)}">Details</a>
+      </div>
+    </div></div>`;
+}
+
+async function load(append) {
+  try {
+    const d = await api.marketplace({ ...lastParams, page, limit: 12 });
+    const beats = d.beats || [];
+    grid.insertAdjacentHTML('beforeend', beats.map(card).join(''));
+    document.getElementById('more-wrap').style.display = beats.length === 12 ? '' : 'none';
+    if (!append && !beats.length) grid.innerHTML = '<p class="note">No beats found.</p>';
+  } catch (e) { showErr('err', e.message); }
+}
+
+grid.addEventListener('click', e => {
+  const btn = e.target.closest('.play-btn');
+  if (!btn || !btn.dataset.url) return;
+  const url = btn.dataset.url;
+  if (currentAudio && !currentAudio.paused && currentAudio.dataset.url === url) {
+    currentAudio.pause(); btn.classList.remove('playing'); btn.textContent = '▶'; return;
+  }
+  if (currentAudio) { currentAudio.pause(); document.querySelectorAll('.play-btn.playing').forEach(x => { x.classList.remove('playing'); x.textContent = '▶'; }); }
+  currentAudio = new Audio(url); currentAudio.dataset.url = url;
+  currentAudio.play(); btn.classList.add('playing'); btn.textContent = '⏸';
+  currentAudio.onended = () => { btn.classList.remove('playing'); btn.textContent = '▶'; };
+});
+
+function search() {
+  page = 1; grid.innerHTML = '';
+  lastParams = { search: document.getElementById('q').value.trim(), genre: document.getElementById('genre').value };
+  load(false);
+}
+document.getElementById('go').onclick = search;
+document.getElementById('q').onkeydown = e => { if (e.key === 'Enter') search(); };
+document.getElementById('more').onclick = () => { page++; load(true); };
+load(false);
+</script>
+</body>
+</html>

@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Studio — Verified Beats Studio</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<nav class="nav" id="nav"></nav>
+<main class="wrap" style="max-width:720px">
+  <div class="page-head"><div><h1>Recording Studio</h1><p>Record from your mic, then publish straight to the marketplace.</p></div></div>
+
+  <div class="card studio-booth">
+    <div><span class="rec-lamp" id="lamp"></span><span id="status" style="color:var(--mut)">Ready</span></div>
+    <div class="timer" id="timer">0:00</div>
+    <div class="meter"><div id="meterfill"></div></div>
+    <button class="rec-btn" id="rec">●</button>
+    <p class="note" id="hint">Tap to start recording. Your browser will ask for mic permission.</p>
+    <div id="rec-err"></div>
+  </div>
+
+  <h2 style="margin:26px 0 8px">Takes</h2>
+  <div id="takes"><p class="note">No takes yet.</p></div>
+
+  <div class="card" id="pub-card" style="display:none;margin-top:18px">
+    <h2 style="margin-bottom:6px">Publish take</h2>
+    <div id="pub-err"></div>
+    <div class="field"><label>Title</label><input id="p-title" placeholder="Late Night Idea"></div>
+    <div class="row2">
+      <div class="field"><label>Genre</label>
+        <select id="p-genre"><option>Trap</option><option>Hip-Hop</option><option>R&amp;B</option><option>Pop</option><option>Drill</option><option>Afrobeats</option><option>EDM</option><option>Other</option></select>
+      </div>
+      <div class="field"><label>Price (USD)</label><input id="p-price" type="number" min="0" step="0.01" value="9.99"></div>
+    </div>
+    <div class="field"><label>BPM (optional)</label><input id="p-bpm" type="number" min="1" max="999"></div>
+    <button class="btn" id="pub-go" style="width:100%">Publish to marketplace</button>
+    <p class="note">You need to be signed in — <a href="upload.html" style="color:var(--pur)">sign in here</a>.</p>
+    <div id="pub-done"></div>
+  </div>
+</main>
+<footer class="footer">Verified Beats Studio</footer>
+<script src="js/api.js"></script>
+<script>
+nav('studio.html');
+const $ = id => document.getElementById(id);
+let mediaRec = null, stream = null, analyser = null, audioCtx = null;
+let chunks = [], startTs = 0, tick = null, meterRaf = null;
+let selectedTake = null, takeN = 0;
+
+function fmt(ms) {
+  const s = Math.floor(ms / 1000);
+  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+}
+function drawMeter() {
+  if (!analyser) return;
+  const data = new Uint8Array(analyser.fftSize);
+  analyser.getByteTimeDomainData(data);
+  let peak = 0;
+  for (let i = 0; i < data.length; i++) peak = Math.max(peak, Math.abs(data[i] - 128) / 128);
+  $('meterfill').style.width = Math.min(100, peak * 140) + '%';
+  meterRaf = requestAnimationFrame(drawMeter);
+}
+
+$('rec').onclick = async () => {
+  if (mediaRec && mediaRec.state === 'recording') { stopRec(); return; }
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const src = audioCtx.createMediaStreamSource(stream);
+    analyser = audioCtx.createAnalyser(); analyser.fftSize = 2048;
+    src.connect(analyser);
+    chunks = [];
+    mediaRec = new MediaRecorder(stream);
+    mediaRec.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+    mediaRec.onstop = onTake;
+    mediaRec.start();
+    startTs = Date.now();
+    $('lamp').classList.add('live'); $('status').textContent = 'Recording';
+    $('rec').textContent = '■'; $('rec').classList.add('stop');
+    $('hint').textContent = 'Tap again to stop.';
+    tick = setInterval(() => $('timer').textContent = fmt(Date.now() - startTs), 250);
+    drawMeter();
+  } catch (e) { showErr('rec-err', 'Mic blocked: ' + e.message); }
+};
+
+function stopRec() {
+  clearInterval(tick); cancelAnimationFrame(meterRaf);
+  $('meterfill').style.width = '0%';
+  mediaRec.stop();
+  stream.getTracks().forEach(t => t.stop());
+  $('lamp').classList.remove('live'); $('status').textContent = 'Ready';
+  $('rec').textContent = '●'; $('rec').classList.remove('stop');
+  $('timer').textContent = '0:00'; $('hint').textContent = 'Tap to record another take.';
+}
+
+function onTake() {
+  const blob = new Blob(chunks, { type: mediaRec.mimeType || 'audio/webm' });
+  const dur = Math.round((Date.now() - startTs) / 1000);
+  takeN++;
+  const take = { id: takeN, blob, dur, url: URL.createObjectURL(blob) };
+  if (takeN === 1) $('takes').innerHTML = '';
+  const div = document.createElement('div');
+  div.className = 'take';
+  div.innerHTML = `<h4>Take ${takeN} · ${fmt(dur * 1000)}</h4><audio controls src="${take.url}" style="width:100%"></audio>
+    <p style="margin-top:10px"><button class="btn small">Select for publishing</button></p>`;
+  div.querySelector('button').onclick = () => {
+    selectedTake = take;
+    document.querySelectorAll('.take').forEach(t => t.style.borderColor = '');
+    div.style.borderColor = 'var(--pur)';
+    $('pub-card').style.display = '';
+    $('pub-card').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
+  $('takes').prepend(div);
+}
+
+$('pub-go').onclick = async () => {
+  try {
+    if (!api.loggedIn()) throw new Error('Sign in first — open the Upload page to sign in, then come back.');
+    if (!selectedTake) throw new Error('Select a take first.');
+    const title = $('p-title').value.trim();
+    if (!title) throw new Error('Title is required.');
+    const price = parseFloat($('p-price').value);
+    if (!(price >= 0)) throw new Error('Price must be a non-negative number.');
+    $('pub-go').disabled = true; $('pub-go').textContent = 'Publishing…';
+    const ext = (selectedTake.blob.type.split('/')[1] || 'webm').split(';')[0];
+    const file = new File([selectedTake.blob], `take-${selectedTake.id}.${ext}`, { type: selectedTake.blob.type });
+    const fd = new FormData();
+    fd.append('audio', file);
+    fd.append('title', title);
+    fd.append('genre', $('p-genre').value);
+    fd.append('price', String(price));
+    fd.append('dur', String(selectedTake.dur));
+    if ($('p-bpm').value) fd.append('bpm', $('p-bpm').value);
+    const beat = await api.upload(fd);
+    $('pub-done').innerHTML = `<div class="badge ok" style="margin-top:14px">✓ Published &amp; fingerprinted</div>
+      <p class="note"><a href="beat.html?id=${esc(beat.id)}" style="color:var(--pur)">View your beat →</a></p>`;
+  } catch (e) { showErr('pub-err', e.message); }
+  finally { $('pub-go').disabled = false; $('pub-go').textContent = 'Publish to marketplace'; }
+};
+</script>
+</body>
+</html>
