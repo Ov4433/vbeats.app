@@ -26,8 +26,11 @@ interface IBeatRegistry {
 contract BeatNFT is ERC1155, ERC1155Holder, ERC2981, Ownable {
     IBeatRegistry public immutable registry;
 
-    /// @notice Default royalty: 10% to the beat's producer.
-    uint96 public constant ROYALTY_BPS = 1000;
+    /// @notice Default royalty in basis points (1000 = 10%). Adjustable by the
+    ///         owner — exact pricing is still TBD, nothing is locked in.
+    uint96 public royaltyBps = 1000;
+    /// @notice Hard cap: royalties can never exceed 25%.
+    uint96 public constant MAX_ROYALTY_BPS = 2500;
 
     /// fingerprint => lease editions minted so far
     mapping(bytes32 => uint256) public leaseMinted;
@@ -80,7 +83,7 @@ contract BeatNFT is ERC1155, ERC1155Holder, ERC2981, Ownable {
         _mint(to, tokenId, amount, "");
         leaseMinted[fingerprint] += amount;
         (address owner, , ) = registry.getBeat(fingerprint);
-        _setTokenRoyalty(tokenId, owner, ROYALTY_BPS);
+        _setTokenRoyalty(tokenId, owner, royaltyBps);
         emit LicenseMinted(fingerprint, to, amount, false);
     }
 
@@ -95,7 +98,7 @@ contract BeatNFT is ERC1155, ERC1155Holder, ERC2981, Ownable {
         exclusiveMinted[fingerprint] = true;
         _mint(to, tokenId, 1, "");
         (address owner, , ) = registry.getBeat(fingerprint);
-        _setTokenRoyalty(tokenId, owner, ROYALTY_BPS);
+        _setTokenRoyalty(tokenId, owner, royaltyBps);
         emit LicenseMinted(fingerprint, to, 1, true);
     }
 
@@ -129,6 +132,13 @@ contract BeatNFT is ERC1155, ERC1155Holder, ERC2981, Ownable {
         onlyBeatOwner(fingerprint)
     {
         _safeTransferFrom(msg.sender, address(this), uint256(fingerprint), amount, "");
+    }
+
+    /// @notice Update the default royalty (basis points, capped at 25%).
+    ///         Applies to beats minted after the change.
+    function setRoyaltyBps(uint96 bps) external onlyOwner {
+        require(bps <= MAX_ROYALTY_BPS, "BeatNFT: royalty too high");
+        royaltyBps = bps;
     }
 
     function supportsInterface(bytes4 interfaceId)
