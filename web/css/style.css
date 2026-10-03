@@ -94,7 +94,8 @@ audio.wide { width: 100%; margin-top: 12px; }
 .mascot-band { display: flex; align-items: center; gap: 26px; background: var(--panel);
   border: 1px solid var(--line); border-radius: 18px; padding: 26px; margin-bottom: 60px;
   position: relative; z-index: 1; }
-.mascot-band img { width: 150px; border-radius: 14px; }
+.mascot-band img { width: 280px; border-radius: 14px; }
+@media (min-width: 900px) { .mascot-band img { width: 340px; } }
 .mascot-band h2 { margin-bottom: 8px; }
 .mascot-band p { color: var(--mut); font-size: 15px; }
 @media (max-width: 640px) { .mascot-band { flex-direction: column; text-align: center; } .hero h1 { font-size: 32px; } }
@@ -163,12 +164,12 @@ audio.wide { width: 100%; margin-top: 12px; }
 .footer-bat img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; }
 
 /* Volt — site guide */
-.volt-fab { position: fixed; right: 18px; bottom: 18px; width: 52px; height: 52px;
+.volt-fab { position: fixed; right: 22px; bottom: 22px; width: 88px; height: 88px;
   border-radius: 50%; border: 1px solid var(--line); background: #14141c; cursor: pointer;
-  z-index: 80; padding: 0; opacity: .65; transition: opacity .25s, border-color .25s, box-shadow .25s; }
-.volt-fab:hover { opacity: 1; border-color: var(--pur); box-shadow: 0 0 22px rgba(150,60,255,.5); }
+  z-index: 80; padding: 0; opacity: .8; transition: opacity .25s, border-color .25s, box-shadow .25s, transform .25s; }
+.volt-fab:hover { opacity: 1; border-color: var(--pur); box-shadow: 0 0 28px rgba(150,60,255,.55); transform: scale(1.06); }
 .volt-fab img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; }
-.volt-toast { position: fixed; right: 18px; bottom: 82px; max-width: 300px; z-index: 81;
+.volt-toast { position: fixed; right: 22px; bottom: 122px; max-width: 300px; z-index: 81;
   display: flex; gap: 10px; align-items: flex-start; background: var(--panel);
   border: 1px solid var(--pur); border-radius: 14px; padding: 10px 12px; cursor: pointer;
   box-shadow: 0 10px 34px rgba(0,0,0,.6); opacity: 0; transform: translateY(8px);
@@ -177,7 +178,7 @@ audio.wide { width: 100%; margin-top: 12px; }
 .volt-toast img { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; flex: none; }
 .volt-toast-text { font-size: 13.5px; line-height: 1.45; }
 .volt-toast-text b { color: #c9a7ff; }
-.volt-panel { position: fixed; right: 18px; bottom: 88px; width: 260px; z-index: 80;
+.volt-panel { position: fixed; right: 22px; bottom: 122px; width: 260px; z-index: 80;
   background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px;
   box-shadow: 0 12px 40px rgba(0,0,0,.6); }
 .volt-panel-head { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
