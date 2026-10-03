@@ -10,6 +10,7 @@ import {
   updateBeat,
   uploadBeat,
   verifyBeat,
+  beatNftInfo,
 } from '../controllers/beatsController';
 import { requireAuth } from '../middleware/auth';
 import { validateBody } from '../middleware/validate';
@@ -30,5 +31,6 @@ router.get('/:id', getBeat);
 router.put('/:id', validateBody(beatUpdateSchema), updateBeat);
 router.delete('/:id', deleteBeat);
 router.post('/:id/verify', verifyBeat);
+router.get('/:id/nft', beatNftInfo);
 
 export default router;

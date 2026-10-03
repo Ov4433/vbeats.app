@@ -323,3 +323,25 @@ export const verifyBeat = asyncHandler(async (req: Request, res: Response) => {
     ...(chain.owner ? { chainOwner: chain.owner } : {}),
   });
 });
+
+// ---------------------------------------------------------------------------
+// GET /v1/beats/:id/nft — NFT licensing info for a beat.
+// tokenId = uint256(SHA-256 fingerprint), so the token is cryptographically
+// tied to the exact audio. Returns configured=false until BEAT_NFT_ADDRESS
+// is set (see contracts/scripts/deploy.ts).
+// ---------------------------------------------------------------------------
+export const beatNftInfo = asyncHandler(async (req: Request, res: Response) => {
+  const beat = await prisma.beat.findUnique({ where: { id: req.params.id } });
+  if (!beat) throw new HttpError(404, 'Beat not found');
+  if (!config.beatNftAddress || !beat.fingerprint) {
+    return res.json({ configured: false });
+  }
+  const fp = beat.fingerprint.startsWith('0x') ? beat.fingerprint : `0x${beat.fingerprint}`;
+  res.json({
+    configured: true,
+    contract: config.beatNftAddress,
+    tokenId: BigInt(fp).toString(10),
+    fingerprint: fp,
+    metadataURI: `${config.apiBaseUrl}/v1/beats/${beat.id}`,
+  });
+});

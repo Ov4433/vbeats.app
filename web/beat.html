@@ -36,6 +36,9 @@ async function load() {
         <h3 style="margin-bottom:10px">🔒 Provenance</h3>
         <p class="mono">${esc(b.fingerprint || 'no fingerprint recorded')}</p>
         <p style="margin-top:10px" id="chainline">${chainBadge(chain)}</p>
+      <div class="card" style="margin-top:16px">
+        <h3 style="margin-bottom:10px">🎟️ NFT licenses</h3>
+        <p id="nftline"><span class="badge wait">Checking…</span></p>
       </div>`;
   } catch (e) { showErr('err', e.message); }
 }
@@ -47,6 +50,22 @@ function chainBadge(c) {
     ${c.registeredAt ? `<p class="note">Registered ${esc(c.registeredAt)}</p>` : ''}`;
   return '<span class="badge no">Fingerprint not registered on-chain</span>';
 }
+async function loadNft() {
+  try {
+    const n = await api.nft(id);
+    const el = document.getElementById('nftline');
+    if (!el) return;
+    if (!n.configured) {
+      el.innerHTML = '<span class="badge wait">NFT contract not deployed yet</span>';
+      return;
+    }
+    el.innerHTML = `<span class="badge ok">✓ Licenses live</span>
+      <p class="note" style="margin-top:8px">Contract <span class="mono">${esc(n.contract)}</span></p>
+      <p class="note">Token ID <span class="mono">${esc(n.tokenId)}</span></p>
+      <p class="note">ERC-1155 · lease editions + 1-of-1 exclusive · 10% producer royalty</p>`;
+  } catch { /* leave the "Checking…" badge */ }
+}
+loadNft();
 load();
 </script>
 </body>

@@ -52,6 +52,7 @@ const api = {
   },
   beat(id) { return this.get('/v1/beats/' + encodeURIComponent(id)); },
   verify(id) { return this.post('/v1/beats/' + encodeURIComponent(id) + '/verify', {}); },
+  nft(id) { return this.get('/v1/beats/' + encodeURIComponent(id) + '/nft'); },
   upload(formData) { return this.postForm('/v1/beats/upload', formData); },
 
   mediaUrl(beat) {
