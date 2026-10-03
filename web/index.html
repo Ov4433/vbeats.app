@@ -25,6 +25,7 @@
   <div class="hero-cta">
     <a class="btn" href="marketplace.html">Browse beats</a>
     <a class="btn ghost" href="studio.html">Open the studio</a>
+    <button class="btn ghost" onclick="Volt.startTour()">🦇 Tour with Volt</button>
   </div>
 </header>
 
@@ -58,6 +59,7 @@
 <footer class="footer"><div class="footer-bat"><img src="assets/mascot-profile.webp" alt=""></div>Verified Beats Studio — Volt keeps the receipts.</footer>
 
 <script src="js/api.js"></script>
+<script src="js/volt.js"></script>
 <script>
 nav('index.html');
 api.marketplace({ limit: 4 }).then(d => {

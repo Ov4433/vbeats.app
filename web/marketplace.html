@@ -34,6 +34,7 @@
 </main>
 <footer class="footer"><div class="footer-bat"><img src="assets/mascot-profile.webp" alt=""></div>Verified Beats Studio — Volt keeps the receipts.</footer>
 <script src="js/api.js"></script>
+<script src="js/volt.js"></script>
 <script>
 nav('marketplace.html');
 let page = 1, currentAudio = null, lastParams = {};
@@ -62,7 +63,7 @@ async function load(append) {
     if (!append && !beats.length) grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:30px">
       <img src="assets/mascot-profile.webp" alt="" style="width:120px;border-radius:50%;margin-bottom:12px">
       <p class="note">No beats found — try another search.</p></div>`;
-  } catch (e) { showErr('err', e.message); }
+  } catch (e) { showErr('err', e.message); Volt.help("The marketplace is waking up (free tier naps). Give it a few seconds and search again."); }
 }
 
 grid.addEventListener('click', e => {

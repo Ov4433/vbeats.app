@@ -54,6 +54,7 @@
 </main>
 <footer class="footer"><div class="footer-bat"><img src="assets/mascot-profile.webp" alt=""></div>Verified Beats Studio — Volt keeps the receipts.</footer>
 <script src="js/api.js"></script>
+<script src="js/volt.js"></script>
 <script>
 nav('upload.html');
 let mode = 'login';
@@ -103,7 +104,7 @@ $('up-go').onclick = async () => {
     const beat = await api.upload(fd);
     $('up-done').innerHTML = `<div class="badge ok" style="margin-top:14px">✓ Uploaded &amp; fingerprinted</div>
       <p class="note"><a href="beat.html?id=${esc(beat.id)}" style="color:var(--pur)">View your beat →</a></p>`;
-  } catch (e) { showErr('up-err', e.message); }
+  } catch (e) { showErr('up-err', e.message); Volt.help("Upload failed — usually the file or the connection. Check you're signed in, then try again."); }
   finally { $('up-go').disabled = false; $('up-go').textContent = 'Upload beat'; }
 };
 refresh();

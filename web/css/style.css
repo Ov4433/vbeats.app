@@ -162,6 +162,44 @@ audio.wide { width: 100%; margin-top: 12px; }
 .footer-bat { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 10px; }
 .footer-bat img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; }
 
+/* Volt — site guide */
+.volt-fab { position: fixed; right: 18px; bottom: 18px; width: 52px; height: 52px;
+  border-radius: 50%; border: 1px solid var(--line); background: #14141c; cursor: pointer;
+  z-index: 80; padding: 0; opacity: .65; transition: opacity .25s, border-color .25s, box-shadow .25s; }
+.volt-fab:hover { opacity: 1; border-color: var(--pur); box-shadow: 0 0 22px rgba(150,60,255,.5); }
+.volt-fab img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; }
+.volt-toast { position: fixed; right: 18px; bottom: 82px; max-width: 300px; z-index: 81;
+  display: flex; gap: 10px; align-items: flex-start; background: var(--panel);
+  border: 1px solid var(--pur); border-radius: 14px; padding: 10px 12px; cursor: pointer;
+  box-shadow: 0 10px 34px rgba(0,0,0,.6); opacity: 0; transform: translateY(8px);
+  transition: opacity .3s, transform .3s; pointer-events: none; }
+.volt-toast.show { opacity: 1; transform: none; pointer-events: auto; }
+.volt-toast img { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; flex: none; }
+.volt-toast-text { font-size: 13.5px; line-height: 1.45; }
+.volt-toast-text b { color: #c9a7ff; }
+.volt-panel { position: fixed; right: 18px; bottom: 88px; width: 260px; z-index: 80;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px;
+  box-shadow: 0 12px 40px rgba(0,0,0,.6); }
+.volt-panel-head { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+.volt-panel-head img { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; }
+.volt-panel-head span { color: var(--mut); font-size: 13px; }
+.volt-tour-btn { width: 100%; margin-bottom: 10px; }
+.volt-links { display: flex; flex-wrap: wrap; gap: 6px; }
+.volt-links a { font-size: 13px; color: var(--pur); text-decoration: none;
+  border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; }
+.volt-links a:hover { border-color: var(--pur); }
+.volt-dim { position: fixed; inset: 0; background: rgba(2,2,8,.72); z-index: 90; }
+.volt-spot { position: absolute; border: 2px solid var(--pur); border-radius: 14px;
+  box-shadow: 0 0 0 4000px rgba(2,2,8,.0), 0 0 34px rgba(150,60,255,.8); z-index: 91;
+  pointer-events: none; transition: all .3s ease; }
+.volt-card { position: absolute; z-index: 92; background: var(--panel);
+  border: 1px solid var(--pur); border-radius: 16px; padding: 14px;
+  box-shadow: 0 12px 44px rgba(0,0,0,.65); display: flex; gap: 10px; align-items: flex-start; flex-wrap: wrap; }
+.volt-card > img { width: 46px; height: 46px; border-radius: 50%; object-fit: cover; flex: none; }
+.volt-card-text { flex: 1 1 200px; font-size: 14.5px; line-height: 1.45; }
+.volt-card-foot { flex: 1 1 100%; display: flex; justify-content: space-between; align-items: center;
+  margin-top: 6px; font-size: 12px; color: var(--mut); }
+
 /* hero banner */
 .hero-banner { position: relative; border-radius: 22px; overflow: hidden;
   border: 1px solid var(--line); box-shadow: 0 0 60px rgba(150,60,255,.25); }

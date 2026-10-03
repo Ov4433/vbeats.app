@@ -50,6 +50,7 @@
 </main>
 <footer class="footer"><div class="footer-bat"><img src="assets/mascot-profile.webp" alt=""></div>Verified Beats Studio — Volt keeps the receipts.</footer>
 <script src="js/api.js"></script>
+<script src="js/volt.js"></script>
 <script>
 nav('studio.html');
 const $ = id => document.getElementById(id);
@@ -90,7 +91,7 @@ $('rec').onclick = async () => {
     $('hint').textContent = 'Tap again to stop.';
     tick = setInterval(() => $('timer').textContent = fmt(Date.now() - startTs), 250);
     drawMeter();
-  } catch (e) { showErr('rec-err', 'Mic blocked: ' + e.message); }
+  } catch (e) { showErr('rec-err', 'Mic blocked: ' + e.message); Volt.help("Mic's blocked. Click the lock icon in the address bar, allow the microphone, then hit record again."); }
 };
 
 function stopRec() {
@@ -144,7 +145,7 @@ $('pub-go').onclick = async () => {
     const beat = await api.upload(fd);
     $('pub-done').innerHTML = `<div class="badge ok" style="margin-top:14px">✓ Published &amp; fingerprinted</div>
       <p class="note"><a href="beat.html?id=${esc(beat.id)}" style="color:var(--pur)">View your beat →</a></p>`;
-  } catch (e) { showErr('pub-err', e.message); }
+  } catch (e) { showErr('pub-err', e.message); Volt.help("That publish didn't go through. Check you're signed in and the take actually recorded, then try again."); }
   finally { $('pub-go').disabled = false; $('pub-go').textContent = 'Publish to marketplace'; }
 };
 </script>

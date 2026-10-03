@@ -40,6 +40,7 @@
 </main>
 <footer class="footer"><div class="footer-bat"><img src="assets/mascot-profile.webp" alt=""></div>Verified Beats Studio — Volt keeps the receipts.</footer>
 <script src="js/api.js"></script>
+<script src="js/volt.js"></script>
 <script>
 nav('chat.html');
 const $ = id => document.getElementById(id);
@@ -103,7 +104,7 @@ async function send() {
     myName = myName || m.username;
     render([m], true);
     lastId = m.id;
-  } catch (e) { showErr('chat-err', e.message); }
+  } catch (e) { showErr('chat-err', e.message); Volt.help("Message didn't send. You need to be signed in to chat — then try again."); }
   finally { $('send').disabled = false; }
 }
 
