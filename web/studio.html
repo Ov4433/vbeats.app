@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Studio — Verified Beats Studio</title>
+<link rel="icon" href="assets/logo.png">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -12,7 +13,10 @@
   <div class="page-head"><div><h1>Recording Studio</h1><p>Record from your mic, then publish straight to the marketplace.</p></div></div>
 
   <div class="card studio-booth">
-    <div><span class="rec-lamp" id="lamp"></span><span id="status" style="color:var(--mut)">Ready</span></div>
+    <div class="booth-side">
+      <img src="assets/mascot-profile.webp" alt="Studio mascot">
+      <div><span class="rec-lamp" id="lamp"></span><span id="status" style="color:var(--mut)">Ready</span></div>
+    </div>
     <div class="timer" id="timer">0:00</div>
     <div class="meter"><div id="meterfill"></div></div>
     <button class="rec-btn" id="rec">●</button>

@@ -4,13 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Upload — Verified Beats Studio</title>
+<link rel="icon" href="assets/logo.png">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 <nav class="nav" id="nav"></nav>
-<main class="wrap" style="max-width:640px">
+<main class="wrap">
   <div class="page-head"><div><h1>Upload</h1><p>Sign in, drop your audio, get fingerprinted on-chain.</p></div></div>
-
+  <div class="up-grid">
+  <div>
   <div class="card" id="auth-card" style="margin-bottom:16px">
     <h2 style="margin-bottom:6px" id="auth-title">Sign in</h2>
     <div id="auth-err"></div>
@@ -41,6 +43,13 @@
     <p class="note">SHA-256 is computed server-side; with the relayer configured the fingerprint is registered on Base automatically.</p>
     <div id="up-done"></div>
   </div>
+  </div><!-- /up-grid left -->
+  <aside class="sidekick">
+    <img src="assets/mascot-profile.webp" alt="Studio mascot">
+    <h3>Your co-producer</h3>
+    <p>Drop the audio — I'll handle the fingerprint, the on-chain registration, and the receipt.</p>
+  </aside>
+  </div><!-- /up-grid -->
 </main>
 <footer class="footer">Verified Beats Studio</footer>
 <script src="js/api.js"></script>

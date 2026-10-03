@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Verified Beats Studio</title>
+<link rel="icon" href="assets/logo.png">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -51,7 +52,9 @@ api.marketplace({ limit: 4 }).then(d => {
   const beats = d.beats || [];
   document.getElementById('latest').innerHTML = beats.length
     ? beats.map(beatCard).join('')
-    : '<p class="note">No beats yet — be the first to upload.</p>';
+    : `<div style="grid-column:1/-1;text-align:center;padding:20px">
+        <img src="assets/mascot-profile.webp" alt="" style="width:110px;border-radius:50%;margin-bottom:10px">
+        <p class="note">No beats yet — be the first to upload.</p></div>`;
 }).catch(() => {
   document.getElementById('latest').innerHTML = '<p class="note">Marketplace is waking up (free tier cold start) — try again in a few seconds.</p>';
 });
