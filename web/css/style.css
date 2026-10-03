@@ -161,4 +161,20 @@ audio.wide { width: 100%; margin-top: 12px; }
   font-size: 16px; }
 .footer-bat { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 10px; }
 .footer-bat img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; }
+
+/* hero banner */
+.hero-banner { position: relative; border-radius: 22px; overflow: hidden;
+  border: 1px solid var(--line); box-shadow: 0 0 60px rgba(150,60,255,.25); }
+.hero-banner img { display: block; width: 100%; }
+.hero-banner-text { position: absolute; left: 34px; bottom: 28px; text-align: left; }
+.hero-banner-text h1 { font-size: 40px; margin: 0 0 6px; }
+.hero-banner-text h1 span { background: linear-gradient(135deg, var(--pur), var(--pnk));
+  -webkit-background-clip: text; background-clip: text; color: transparent; }
+.hero-banner-text p { color: #d9d9e4; font-size: 17px; margin: 0; }
+.hero-banner-text b { color: #c9a7ff; }
+@media (max-width: 640px) {
+  .hero-banner-text { left: 18px; bottom: 16px; }
+  .hero-banner-text h1 { font-size: 26px; }
+  .hero-banner-text p { font-size: 14px; }
+}
 .footer { text-align: center; color: var(--mut); font-size: 13px; padding: 40px 20px; position: relative; z-index: 1; }
