@@ -144,4 +144,21 @@ audio.wide { width: 100%; margin-top: 12px; }
 .booth-side { display: flex; gap: 18px; align-items: center; justify-content: center; margin-bottom: 6px; flex-wrap: wrap; }
 .booth-side img { width: 92px; height: 92px; border-radius: 50%; object-fit: cover;
   border: 2px solid var(--line); }
+
+/* mascot theme — the bat runs the studio */
+.mascot-says { display: flex; gap: 14px; align-items: flex-start; margin: 18px 0; }
+.mascot-says img { width: 64px; height: 64px; border-radius: 50%; object-fit: cover;
+  border: 2px solid var(--line); flex-shrink: 0; }
+.mascot-says .bubble { background: var(--panel2); border: 1px solid var(--line);
+  border-radius: 4px 16px 16px 16px; padding: 12px 16px; font-size: 15px; }
+.mascot-says .bubble b { color: #c9a7ff; }
+.hero-mascot { display: flex; align-items: center; justify-content: center; gap: 26px;
+  flex-wrap: wrap; margin-bottom: 6px; }
+.hero-mascot img.bat { width: 190px; border-radius: 22px;
+  box-shadow: 0 0 60px rgba(150,60,255,.45); }
+.hero-mascot .bubble { max-width: 340px; text-align: left; background: var(--panel2);
+  border: 1px solid var(--line); border-radius: 16px 16px 16px 4px; padding: 14px 18px;
+  font-size: 16px; }
+.footer-bat { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 10px; }
+.footer-bat img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; }
 .footer { text-align: center; color: var(--mut); font-size: 13px; padding: 40px 20px; position: relative; z-index: 1; }

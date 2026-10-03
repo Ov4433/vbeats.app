@@ -13,7 +13,7 @@
   <div id="err"></div>
   <div id="beat"></div>
 </main>
-<footer class="footer">Verified Beats Studio</footer>
+<footer class="footer"><div class="footer-bat"><img src="assets/mascot-profile.webp" alt=""></div>Verified Beats Studio — the bat keeps the receipts.</footer>
 <script src="js/api.js"></script>
 <script>
 nav('');
@@ -40,6 +40,10 @@ async function load() {
       <div class="card" style="margin-top:16px">
         <h3 style="margin-bottom:10px">🎟️ NFT licenses</h3>
         <p id="nftline"><span class="badge wait">Checking…</span></p>
+      </div>
+      <div class="mascot-says">
+        <img src="assets/mascot-profile.webp" alt="">
+        <div class="bubble">🦇 The fingerprint doesn't lie. If it's <b>verified</b>, this is the real audio.</div>
       </div>`;
   } catch (e) { showErr('err', e.message); }
 }
