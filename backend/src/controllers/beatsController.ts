@@ -12,7 +12,10 @@ import {
   serializeBeat,
 } from '../utils/serialize';
 import { sha256File } from '../services/fingerprintService';
-import { checkFingerprintOnChain } from '../services/chainService';
+import {
+  checkFingerprintOnChain,
+  registerBeatOnChain,
+} from '../services/chainService';
 
 // ---------------------------------------------------------------------------
 // Multer: audio uploads land in <uploadDir>/ and are served at /uploads/*
@@ -158,6 +161,10 @@ export const uploadBeat = [
         userId: req.user!.id,
       },
     });
+    // Register-on-upload: fire-and-forget on-chain registration. Never fails
+    // the upload — the verify endpoint remains the source of truth.
+    const metadataURI = `${config.apiBaseUrl}/v1/beats/${beat.id}`;
+    registerBeatOnChain(fingerprint, metadataURI).catch(() => undefined);
     res.status(201).json({ ...serializeBeat(beat), fileUrl: audioUrl });
   }),
 ];

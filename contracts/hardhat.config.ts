@@ -13,6 +13,13 @@ const config: HardhatUserConfig = {
   },
   networks: {
     hardhat: {},
+    // Base mainnet: deploy with `npx hardhat run scripts/deploy.ts --network base`
+    // DEPLOYER_KEY is the deployer wallet's private key (never commit it).
+    base: {
+      chainId: 8453,
+      url: process.env.RPC_URL || "https://mainnet.base.org",
+      accounts: process.env.DEPLOYER_KEY ? [process.env.DEPLOYER_KEY] : [],
+    },
     // e.g. Base Sepolia for testnet deploys:
     // baseSepolia: {
     //   url: process.env.RPC_URL || "",

@@ -1,10 +1,11 @@
 import { ethers } from 'ethers';
 import { config } from '../config';
 
-// Minimal ABI for the BeatRegistry contract (read-only calls only).
+// Minimal ABI for the BeatRegistry contract.
 const BEAT_REGISTRY_ABI = [
   'function isRegistered(bytes32 fingerprint) view returns (bool)',
   'function getBeat(bytes32 fingerprint) view returns (address owner, uint256 timestamp, string metadataURI)',
+  'function registerBeat(bytes32 fingerprint, string calldata metadataURI) external',
 ] as const;
 
 export interface ChainCheck {
@@ -18,6 +19,42 @@ export interface ChainCheck {
 function normalizeFingerprint(fp: string): string | null {
   const hex = fp.startsWith('0x') ? fp : `0x${fp}`;
   return /^0x[0-9a-fA-F]{64}$/.test(hex) ? hex : null;
+}
+
+/**
+ * Relayer write: register a beat fingerprint on-chain at upload time.
+ * Only runs when RELAYER_KEY is set (backend-held relayer wallet, funded
+ * with Base ETH for gas). Never throws — callers fire-and-forget this so a
+ * chain hiccup can never fail an upload. Returns the tx hash or null.
+ */
+export async function registerBeatOnChain(
+  fingerprint: string,
+  metadataURI: string
+): Promise<string | null> {
+  if (!config.relayerKey) {
+    return null; // relayer not configured — user-signing flow or off
+  }
+  if (!config.rpcUrl || !config.beatRegistryAddress) {
+    console.warn('[chain] relayer set but RPC_URL/BEAT_REGISTRY_ADDRESS missing; skipping on-chain registration');
+    return null;
+  }
+  const fp = normalizeFingerprint(fingerprint);
+  if (!fp) return null;
+  try {
+    const provider = new ethers.JsonRpcProvider(config.rpcUrl);
+    const wallet = new ethers.Wallet(config.relayerKey, provider);
+    const contract = new ethers.Contract(
+      config.beatRegistryAddress,
+      BEAT_REGISTRY_ABI,
+      wallet
+    );
+    const tx = (await contract.registerBeat(fp, metadataURI)) as { hash: string };
+    console.log(`[chain] registerBeat sent: ${tx.hash} (fp ${fp.slice(0, 10)}…)`);
+    return tx.hash;
+  } catch (err) {
+    console.warn('[chain] registerBeat failed:', (err as Error).message);
+    return null;
+  }
 }
 
 /**

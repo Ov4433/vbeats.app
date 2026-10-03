@@ -31,6 +31,10 @@ export const config = {
   stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? '',
   rpcUrl: process.env.RPC_URL ?? '',
   beatRegistryAddress: process.env.BEAT_REGISTRY_ADDRESS ?? '',
+  // Relayer wallet private key for register-on-upload. When set (and the
+  // RPC/contract vars above are set), each upload fires a registerBeat tx.
+  // Leave empty to disable on-chain writes entirely.
+  relayerKey: process.env.RELAYER_KEY ?? '',
 };
 
 export function assertSecretsInProduction() {
