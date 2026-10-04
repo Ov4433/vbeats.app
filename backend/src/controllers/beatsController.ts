@@ -164,8 +164,13 @@ export const uploadBeat = [
     });
     // Register-on-upload: fire-and-forget on-chain registration. Never fails
     // the upload — the verify endpoint remains the source of truth.
+    // The producer's wallet address (optional `producerAddress` multipart
+    // field) is recorded as the on-chain owner; without it the relayer
+    // skips the write rather than claiming ownership itself.
     const metadataURI = `${publicBaseUrl(req)}/v1/beats/${beat.id}`;
-    registerBeatOnChain(fingerprint, metadataURI).catch(() => undefined);
+    const producerAddress =
+      typeof req.body?.producerAddress === 'string' ? req.body.producerAddress : undefined;
+    registerBeatOnChain(fingerprint, metadataURI, producerAddress).catch(() => undefined);
     res.status(201).json({ ...serializeBeat(beat), fileUrl: audioUrl });
   }),
 ];

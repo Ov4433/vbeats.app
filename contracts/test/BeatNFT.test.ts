@@ -17,7 +17,9 @@ describe("BeatNFT", function () {
       await registry.getAddress()
     )) as unknown as BeatNFT;
     // Producer registers the beat (as the relayer would on upload).
-    await registry.connect(producer).registerBeat(fingerprint, metadataURI);
+    await registry
+      .connect(producer)
+      .registerBeat(fingerprint, metadataURI, producer.address);
     return { registry, nft, producer, buyer, stranger };
   }
 
@@ -32,19 +34,28 @@ describe("BeatNFT", function () {
     ).to.be.revertedWith("BeatNFT: not the beat owner");
   });
 
-  it("mints the exclusive 1-of-1 exactly once", async function () {
+  it("mints the exclusive 1-of-1 exactly once, on its own token id", async function () {
     const { nft, producer } = await deploy();
+    const exclusiveId = await nft.exclusiveTokenId(fingerprint);
+    const leaseId = await nft.leaseTokenId(fingerprint);
+    expect(exclusiveId).to.not.equal(leaseId);
     await nft.connect(producer).mintExclusive(fingerprint, producer.address);
-    expect(await nft.balanceOf(producer.address, tokenId)).to.equal(1);
+    expect(await nft.balanceOf(producer.address, exclusiveId)).to.equal(1);
+    expect(await nft.balanceOf(producer.address, leaseId)).to.equal(0);
     expect(await nft.exclusiveMinted(fingerprint)).to.equal(true);
     await expect(
       nft.connect(producer).mintExclusive(fingerprint, producer.address)
     ).to.be.revertedWith("BeatNFT: exclusive already minted");
   });
 
-  it("serves metadata from the registry entry", async function () {
-    const { nft } = await deploy();
-    expect(await nft.uri(tokenId)).to.equal(metadataURI);
+  it("serves metadata from the registry entry for both license types", async function () {
+    const { nft, producer } = await deploy();
+    const leaseId = await nft.leaseTokenId(fingerprint);
+    const exclusiveId = await nft.exclusiveTokenId(fingerprint);
+    await nft.connect(producer).mintLease(fingerprint, producer.address, 1);
+    await nft.connect(producer).mintExclusive(fingerprint, producer.address);
+    expect(await nft.uri(leaseId)).to.equal(metadataURI);
+    expect(await nft.uri(exclusiveId)).to.equal(metadataURI);
   });
 
   it("pays 10% royalty to the producer", async function () {
@@ -59,19 +70,19 @@ describe("BeatNFT", function () {
     const { nft, producer, buyer } = await deploy();
     const price = ethers.parseEther("0.05");
     await nft.connect(producer).mintLease(fingerprint, producer.address, 10);
-    await nft.connect(producer).stockForSale(fingerprint, 10);
-    await nft.connect(producer).setPrice(fingerprint, price);
+    await nft.connect(producer).stockForSale(fingerprint, false, 10);
+    await nft.connect(producer).setPrice(fingerprint, false, price);
 
     const before = await ethers.provider.getBalance(producer.address);
-    await expect(nft.connect(buyer).buy(fingerprint, 2, { value: price * 2n }))
+    await expect(nft.connect(buyer).buy(fingerprint, false, 2, { value: price * 2n }))
       .to.emit(nft, "LicenseBought")
-      .withArgs(fingerprint, buyer.address, 2, price * 2n);
+      .withArgs(fingerprint, false, buyer.address, 2, price * 2n);
     expect(await nft.balanceOf(buyer.address, tokenId)).to.equal(2);
     const after = await ethers.provider.getBalance(producer.address);
     expect(after - before).to.equal(price * 2n);
 
     await expect(
-      nft.connect(buyer).buy(fingerprint, 1, { value: price / 2n })
+      nft.connect(buyer).buy(fingerprint, false, 1, { value: price / 2n })
     ).to.be.revertedWith("BeatNFT: wrong payment");
   });
 

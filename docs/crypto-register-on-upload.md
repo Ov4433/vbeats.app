@@ -10,9 +10,10 @@ milestone.
 ## What has to happen at upload time
 
 After the API stores a beat and computes its SHA-256 fingerprint, call
-`BeatRegistry.registerBeat(bytes32 fingerprint, string metadataURI)` so
-ownership/provenance is provable. That call is a state-changing
-transaction: it needs a **signer**.
+`BeatRegistry.registerBeat(bytes32 fingerprint, string metadataURI, address producer)`
+so ownership/provenance is provable. That call is a state-changing
+transaction: it needs a **signer**. The registry records the **producer**
+address as owner — never the relayer.
 
 ## The one decision only Star can make: who signs?
 
@@ -34,6 +35,17 @@ end-to-end now, keep B as the decentralization milestone. Either way the
 deploy itself (Base mainnet, `npx hardhat run scripts/deploy.ts
 --network base`) needs Star's wallet — see `contracts/hardhat.config.ts`
 `base` network (added, uncommitted).
+
+## Producer address capture (2026-10-04)
+
+The relayer now takes the producer's address explicitly:
+`registerBeatOnChain(fingerprint, metadataURI, producerAddress)` and
+`registerBeat(..., producer)` records it as owner. `POST /v1/beats/upload`
+accepts an optional `producerAddress` multipart field; when it's missing or
+invalid the relayer **skips** the on-chain write rather than recording the
+backend as owner. Still open: where the producer's wallet comes from at
+upload time — the app/web upload screens don't capture a connected wallet
+yet, so today the field is simply absent and the write is skipped.
 
 ## After the deploy
 

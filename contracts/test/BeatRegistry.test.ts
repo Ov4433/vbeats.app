@@ -23,7 +23,7 @@ describe("BeatRegistry", function () {
 
   it("registers a beat and emits BeatRegistered", async function () {
     const { registry, owner } = await deploy();
-    await expect(registry.registerBeat(fingerprint, metadataURI))
+    await expect(registry.registerBeat(fingerprint, metadataURI, owner.address))
       .to.emit(registry, "BeatRegistered")
       .withArgs(fingerprint, owner.address, metadataURI);
     expect(await registry.isRegistered(fingerprint)).to.equal(true);
@@ -34,16 +34,16 @@ describe("BeatRegistry", function () {
   });
 
   it("rejects double registration", async function () {
-    const { registry } = await deploy();
-    await registry.registerBeat(fingerprint, metadataURI);
+    const { registry, owner } = await deploy();
+    await registry.registerBeat(fingerprint, metadataURI, owner.address);
     await expect(
-      registry.registerBeat(fingerprint, metadataURI)
+      registry.registerBeat(fingerprint, metadataURI, owner.address)
     ).to.be.revertedWith("BeatRegistry: already registered");
   });
 
   it("transfers ownership and emits BeatTransferred", async function () {
     const { registry, owner, other } = await deploy();
-    await registry.registerBeat(fingerprint, metadataURI);
+    await registry.registerBeat(fingerprint, metadataURI, owner.address);
     await expect(registry.transferBeat(fingerprint, other.address))
       .to.emit(registry, "BeatTransferred")
       .withArgs(fingerprint, owner.address, other.address);
@@ -51,9 +51,28 @@ describe("BeatRegistry", function () {
     expect(beat.owner).to.equal(other.address);
   });
 
+  it("records the producer as owner when a relayer registers on their behalf", async function () {
+    const { registry, owner, other } = await deploy();
+    // `other` acts as the backend relayer: it signs, but the producer owns.
+    await expect(
+      registry.connect(other).registerBeat(fingerprint, metadataURI, owner.address)
+    )
+      .to.emit(registry, "BeatRegistered")
+      .withArgs(fingerprint, owner.address, metadataURI);
+    const beat = await registry.getBeat(fingerprint);
+    expect(beat.owner).to.equal(owner.address);
+  });
+
+  it("rejects a zero producer address", async function () {
+    const { registry, owner } = await deploy();
+    await expect(
+      registry.registerBeat(fingerprint, metadataURI, ethers.ZeroAddress)
+    ).to.be.revertedWith("BeatRegistry: zero producer");
+  });
+
   it("rejects transfer by non-owner", async function () {
-    const { registry, other } = await deploy();
-    await registry.registerBeat(fingerprint, metadataURI);
+    const { registry, owner, other } = await deploy();
+    await registry.registerBeat(fingerprint, metadataURI, owner.address);
     await expect(
       registry.connect(other).transferBeat(fingerprint, other.address)
     ).to.be.revertedWith("BeatRegistry: not the owner");

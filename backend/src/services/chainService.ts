@@ -5,7 +5,7 @@ import { config } from '../config';
 const BEAT_REGISTRY_ABI = [
   'function isRegistered(bytes32 fingerprint) view returns (bool)',
   'function getBeat(bytes32 fingerprint) view returns (address owner, uint256 timestamp, string metadataURI)',
-  'function registerBeat(bytes32 fingerprint, string calldata metadataURI) external',
+  'function registerBeat(bytes32 fingerprint, string calldata metadataURI, address producer) external',
 ] as const;
 
 export interface ChainCheck {
@@ -26,10 +26,16 @@ function normalizeFingerprint(fp: string): string | null {
  * Only runs when RELAYER_KEY is set (backend-held relayer wallet, funded
  * with Base ETH for gas). Never throws — callers fire-and-forget this so a
  * chain hiccup can never fail an upload. Returns the tx hash or null.
+ *
+ * The producer's address is recorded as the on-chain owner, not the
+ * relayer. When no producer address is supplied we skip the write
+ * entirely — registering a wrong owner on-chain is worse than not
+ * registering.
  */
 export async function registerBeatOnChain(
   fingerprint: string,
-  metadataURI: string
+  metadataURI: string,
+  producerAddress?: string
 ): Promise<string | null> {
   if (!config.relayerKey) {
     return null; // relayer not configured — user-signing flow or off
@@ -40,6 +46,10 @@ export async function registerBeatOnChain(
   }
   const fp = normalizeFingerprint(fingerprint);
   if (!fp) return null;
+  if (!producerAddress || !ethers.isAddress(producerAddress)) {
+    console.warn('[chain] registerBeat skipped: no valid producer address supplied; not recording the relayer as owner');
+    return null;
+  }
   try {
     const provider = new ethers.JsonRpcProvider(config.rpcUrl);
     const wallet = new ethers.Wallet(config.relayerKey, provider);
@@ -48,8 +58,8 @@ export async function registerBeatOnChain(
       BEAT_REGISTRY_ABI,
       wallet
     );
-    const tx = (await contract.registerBeat(fp, metadataURI)) as { hash: string };
-    console.log(`[chain] registerBeat sent: ${tx.hash} (fp ${fp.slice(0, 10)}…)`);
+    const tx = (await contract.registerBeat(fp, metadataURI, producerAddress)) as { hash: string };
+    console.log(`[chain] registerBeat sent: ${tx.hash} (fp ${fp.slice(0, 10)}…, owner ${producerAddress})`);
     return tx.hash;
   } catch (err) {
     console.warn('[chain] registerBeat failed:', (err as Error).message);

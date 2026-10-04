@@ -26,18 +26,26 @@ contract BeatRegistry {
         address indexed to
     );
 
-    /// @notice Register a beat fingerprint to the caller.
+    /// @notice Register a beat fingerprint to its producer.
+    /// @dev Takes the producer explicitly so a relayer (backend wallet) can
+    ///      register on the producer's behalf without becoming the owner.
     /// @param fingerprint SHA-256 of the audio file, as bytes32.
     /// @param metadataURI Off-chain metadata (e.g. https://api.vbeats.app/v1/beats/<id>).
-    function registerBeat(bytes32 fingerprint, string calldata metadataURI) external {
+    /// @param producer Address recorded as the beat's owner.
+    function registerBeat(
+        bytes32 fingerprint,
+        string calldata metadataURI,
+        address producer
+    ) external {
         require(fingerprint != bytes32(0), "BeatRegistry: empty fingerprint");
+        require(producer != address(0), "BeatRegistry: zero producer");
         require(_beats[fingerprint].owner == address(0), "BeatRegistry: already registered");
         _beats[fingerprint] = Beat({
-            owner: msg.sender,
+            owner: producer,
             timestamp: block.timestamp,
             metadataURI: metadataURI
         });
-        emit BeatRegistered(fingerprint, msg.sender, metadataURI);
+        emit BeatRegistered(fingerprint, producer, metadataURI);
     }
 
     /// @notice Transfer a registered beat to a new owner. Caller must be the owner.
