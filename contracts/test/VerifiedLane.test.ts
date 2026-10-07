@@ -46,6 +46,8 @@ describe("Verified lane: VouchSBT + BeatEscrow + BeatShard", function () {
     return { registry, nft, vouch, escrow, shardFactory, studio, producer, buyer, stranger };
   }
 
+  const week = 7 * 24 * 3600;
+
   describe("VouchSBT", function () {
     it("issues one soulbound coin per verified buyer", async function () {
       const { vouch, studio, buyer, stranger } = await deploy();
@@ -97,11 +99,12 @@ describe("Verified lane: VouchSBT + BeatEscrow + BeatShard", function () {
           tokenId,
           10,
           price,
-          fingerprint
+          fingerprint,
+          week
         );
       await escrow
         .connect(producer)
-        .list(await nft.getAddress(), tokenId, 10, price, fingerprint);
+        .list(await nft.getAddress(), tokenId, 10, price, fingerprint, week);
       return { ...d, tokenId, listingId };
     }
 
@@ -152,6 +155,53 @@ describe("Verified lane: VouchSBT + BeatEscrow + BeatShard", function () {
       );
     });
 
+    it("lets the seller reclaim after expiry when a funded deal is stuck", async function () {
+      const d = await deploy();
+      const { nft, escrow, vouch, studio, producer, buyer } = d;
+      const tokenId = await nft.leaseTokenId(fingerprint);
+      await nft.connect(producer).mintLease(fingerprint, producer.address, 10);
+      await nft
+        .connect(producer)
+        .setApprovalForAll(await escrow.getAddress(), true);
+      const hour = 3600;
+      const listingId = await escrow
+        .connect(producer)
+        .list.staticCall(
+          await nft.getAddress(),
+          tokenId,
+          10,
+          price,
+          fingerprint,
+          hour
+        );
+      await escrow
+        .connect(producer)
+        .list(await nft.getAddress(), tokenId, 10, price, fingerprint, hour);
+      await vouch.connect(studio).issue(buyer.address);
+      await escrow.connect(buyer).fund(listingId, { value: price });
+      // Vouch revoked after funding: settle can never run now.
+      await vouch.connect(studio).revoke(buyer.address);
+      await expect(escrow.settle(listingId)).to.be.revertedWith(
+        "BeatEscrow: buyer verification lapsed"
+      );
+      // Too early to reclaim.
+      await expect(
+        escrow.connect(producer).reclaim(listingId)
+      ).to.be.revertedWith("BeatEscrow: not expired");
+      // Past expiry: seller unwinds, buyer is refunded, NFT comes home.
+      await ethers.provider.send("evm_increaseTime", [hour + 1]);
+      await ethers.provider.send("evm_mine", []);
+      const buyerBefore = await ethers.provider.getBalance(buyer.address);
+      await expect(escrow.connect(producer).reclaim(listingId)).to.emit(
+        escrow,
+        "Reclaimed"
+      );
+      expect(await nft.balanceOf(producer.address, tokenId)).to.equal(10);
+      expect(await ethers.provider.getBalance(buyer.address)).to.be.greaterThan(
+        buyerBefore
+      );
+    });
+
     it("lets the seller cancel an unfunded listing", async function () {
       const { escrow, nft, producer, tokenId, listingId } = await listed();
       await expect(escrow.connect(producer).cancel(listingId)).to.emit(
@@ -175,11 +225,12 @@ describe("Verified lane: VouchSBT + BeatEscrow + BeatShard", function () {
           exclusiveId,
           1,
           price,
-          fingerprint
+          fingerprint,
+          week
         );
       await escrow
         .connect(producer)
-        .list(await nft.getAddress(), exclusiveId, 1, price, fingerprint);
+        .list(await nft.getAddress(), exclusiveId, 1, price, fingerprint, week);
       await vouch.connect(studio).issue(buyer.address);
       await escrow.connect(buyer).fund(listingId, { value: price });
       await escrow.settle(listingId);

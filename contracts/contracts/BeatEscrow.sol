@@ -28,6 +28,7 @@ contract BeatEscrow is ERC1155Holder, Ownable {
         uint256 priceWei;
         bytes32 fingerprint; // lot#
         address buyer;
+        uint64 expiresAt; // after this, the seller can reclaim + refund
         bool active;
     }
 
@@ -50,6 +51,7 @@ contract BeatEscrow is ERC1155Holder, Ownable {
     );
     event Cancelled(uint256 indexed listingId);
     event Refunded(uint256 indexed listingId, address indexed buyer);
+    event Reclaimed(uint256 indexed listingId);
 
     constructor(address vouch_) Ownable(msg.sender) {
         require(vouch_ != address(0), "BeatEscrow: zero vouch");
@@ -62,16 +64,21 @@ contract BeatEscrow is ERC1155Holder, Ownable {
     }
 
     /// @notice Producer lists `amount` licenses: they move into escrow now.
+    /// @param expirySeconds how long the buyer has to complete the deal
+    ///        (min 1 hour, max 90 days) before the seller can reclaim.
     function list(
         address nft,
         uint256 tokenId,
         uint256 amount,
         uint256 priceWei,
-        bytes32 fingerprint
+        bytes32 fingerprint,
+        uint64 expirySeconds
     ) external returns (uint256) {
         require(amount > 0, "BeatEscrow: zero amount");
         require(priceWei > 0, "BeatEscrow: zero price");
         require(fingerprint != bytes32(0), "BeatEscrow: zero fingerprint");
+        require(expirySeconds >= 1 hours, "BeatEscrow: expiry too short");
+        require(expirySeconds <= 90 days, "BeatEscrow: expiry too long");
         uint256 listingId = _nextListingId++;
         listings[listingId] = Listing({
             seller: msg.sender,
@@ -81,6 +88,7 @@ contract BeatEscrow is ERC1155Holder, Ownable {
             priceWei: priceWei,
             fingerprint: fingerprint,
             buyer: address(0),
+            expiresAt: uint64(block.timestamp) + expirySeconds,
             active: true
         });
         IERC1155(nft).safeTransferFrom(msg.sender, address(this), tokenId, amount, "");
@@ -134,5 +142,21 @@ contract BeatEscrow is ERC1155Holder, Ownable {
         (bool ok, ) = l.buyer.call{value: l.priceWei}("");
         require(ok, "BeatEscrow: refund failed");
         emit Refunded(listingId, l.buyer);
+    }
+
+    /// @notice After expiry, the seller unwinds a stuck deal: licenses come
+    /// home and the buyer's ETH is returned. Covers the case where the
+    /// buyer's vouch was revoked after funding, so `settle` can never run.
+    function reclaim(uint256 listingId) external {
+        Listing storage l = listings[listingId];
+        require(l.active, "BeatEscrow: inactive");
+        require(msg.sender == l.seller, "BeatEscrow: not the seller");
+        require(l.buyer != address(0), "BeatEscrow: not funded");
+        require(block.timestamp > l.expiresAt, "BeatEscrow: not expired");
+        l.active = false;
+        IERC1155(l.nft).safeTransferFrom(address(this), l.seller, l.tokenId, l.amount, "");
+        (bool ok, ) = l.buyer.call{value: l.priceWei}("");
+        require(ok, "BeatEscrow: reclaim refund failed");
+        emit Reclaimed(listingId);
     }
 }
