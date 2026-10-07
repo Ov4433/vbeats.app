@@ -42,6 +42,12 @@ async function main() {
   const stakingAddress = await staking.getAddress();
   console.log(`BeatStaking deployed to:     ${stakingAddress}`);
 
+  const BeatOffers = await ethers.getContractFactory("BeatOffers");
+  const offers = await BeatOffers.deploy(registryAddress, vouchAddress);
+  await offers.waitForDeployment();
+  const offersAddress = await offers.getAddress();
+  console.log(`BeatOffers deployed to:      ${offersAddress}`);
+
   console.log(`
 Set these in the Render vbeats-api service env (and backend/.env):
   RPC_URL=https://mainnet.base.org
@@ -51,6 +57,7 @@ Set these in the Render vbeats-api service env (and backend/.env):
   BEAT_ESCROW_ADDRESS=${escrowAddress}
   SHARD_FACTORY_ADDRESS=${shardFactoryAddress}
   BEAT_STAKING_ADDRESS=${stakingAddress}
+  BEAT_OFFERS_ADDRESS=${offersAddress}
   PLATFORM_ADDRESS=${platformAddress}
 `);
 }
