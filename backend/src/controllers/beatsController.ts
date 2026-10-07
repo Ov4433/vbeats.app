@@ -10,6 +10,7 @@ import { HttpError } from '../middleware/errorHandler';
 import {
   normalizeBeatInput,
   serializeBeat,
+  BeatCardStats,
 } from '../utils/serialize';
 import { sha256File } from '../services/fingerprintService';
 import {
@@ -17,6 +18,24 @@ import {
   registerBeatOnChain,
 } from '../services/chainService';
 import { publicBaseUrl } from '../utils/baseUrl';
+import { salesRanking, rankForBeat } from '../services/rankService';
+
+/** Attach back-of-the-card sales stats to a serialized beat. */
+function withCardStats<T extends { id: string }>(
+  beat: T,
+  ranking: Awaited<ReturnType<typeof salesRanking>>
+): T & { stats: BeatCardStats } {
+  const r = rankForBeat(ranking, beat.id);
+  return {
+    ...beat,
+    stats: {
+      sales: r.sales,
+      rankBySales: r.rank,
+      rankedBeats: ranking.rankedBeats,
+      totalBeats: ranking.totalBeats,
+    },
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Multer: audio uploads land in <uploadDir>/ and are served at /uploads/*
@@ -216,7 +235,13 @@ export const marketplace = asyncHandler(async (req: Request, res: Response) => {
       take: limit,
     }),
   ]);
-  res.json({ beats: beats.map(serializeBeat), total, page, limit });
+  const ranking = await salesRanking();
+  res.json({
+    beats: beats.map((b) => withCardStats(serializeBeat(b), ranking)),
+    total,
+    page,
+    limit,
+  });
 });
 
 /** Compatibility with the mobile app's GET /beats/search?q= call. */
@@ -246,7 +271,8 @@ export const search = asyncHandler(async (req: Request, res: Response) => {
 export const getBeat = asyncHandler(async (req: Request, res: Response) => {
   const beat = await prisma.beat.findUnique({ where: { id: req.params.id } });
   if (!beat) throw new HttpError(404, 'Beat not found');
-  res.json(serializeBeat(beat));
+  const ranking = await salesRanking();
+  res.json(withCardStats(serializeBeat(beat), ranking));
 });
 
 // ---------------------------------------------------------------------------

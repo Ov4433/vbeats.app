@@ -44,6 +44,20 @@ export interface SerializedBeat {
   duration: number;
   createdAt: string;
   updatedAt: string;
+  // Card-back stats (populated by the beats controller, not stored)
+  stats?: BeatCardStats;
+}
+
+/** "Back of the baseball card" numbers for a beat. */
+export interface BeatCardStats {
+  /** Completed sales (licenses + purchases). */
+  sales: number;
+  /** Rank by beats sold, 1 = best seller. Ties share a rank. */
+  rankBySales: number;
+  /** How many beats appear on the sales leaderboard. */
+  rankedBeats: number;
+  /** Total beats in the studio, for "rank #3 of 128". */
+  totalBeats: number;
 }
 
 /**
