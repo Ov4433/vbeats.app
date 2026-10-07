@@ -32,7 +32,7 @@ async function load() {
         <p>${esc(b.genre)}${b.bpm ? ' · ' + esc(b.bpm) + ' BPM' : ''}${b.duration || b.dur ? ' · ' + fmtDur(b.duration || b.dur) : ''}</p></div>
         <div class="price" style="font-size:24px">$${esc(b.price)}</div></div>
       <img src="${esc(api.artUrl(b))}" alt="" style="width:100%;border-radius:16px;border:1px solid var(--line)">
-      <audio class="wide" controls src="${esc(api.mediaUrl(b))}"></audio>
+      <audio class="wide" id="player" controls src="${esc(api.mediaUrl(b))}"></audio>
       ${b.description || b.desc ? `<div class="card" style="margin-top:16px"><p>${esc(b.description || b.desc)}</p></div>` : ''}
       <div class="card" style="margin-top:16px">
         <h3 style="margin-bottom:10px">🔒 Provenance</h3>
@@ -42,11 +42,43 @@ async function load() {
         <h3 style="margin-bottom:10px">🎟️ NFT licenses</h3>
         <p id="nftline"><span class="badge wait">Checking…</span></p>
       </div>
+      <div class="card" style="margin-top:16px">
+        <h3 style="margin-bottom:10px">📊 Card back</h3>
+        <div id="cardback">${cardBack(b.stats)}</div>
+      </div>
       <div class="mascot-says">
         <img src="assets/mascot-profile.webp" alt="">
         <div class="bubble">🦇 The fingerprint doesn't lie. If it's <b>verified</b>, this is the real audio.</div>
       </div>`;
+    // Card-back play tracking: count the play once, report listen time on pause.
+    const player = document.getElementById('player');
+    if (player) {
+      let counted = false;
+      player.addEventListener('play', () => {
+        if (counted) return;
+        counted = true;
+        api.play(id, 0);
+      });
+      const reportTime = () => {
+        if (player.currentTime > 1) api.play(id, Math.floor(player.currentTime));
+      };
+      player.addEventListener('pause', reportTime);
+      player.addEventListener('ended', reportTime);
+    }
   } catch (e) { showErr('err', e.message); }
+}
+function cardBack(s) {
+  if (!s) return '<span class="badge wait">Stats loading…</span>';
+  const rankLine = s.rankBySales <= s.rankedBeats
+    ? `#${s.rankBySales} of ${s.totalBeats} by beats sold`
+    : `Unranked · ${s.totalBeats} beats in the studio`;
+  return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;text-align:center">
+      <div><div style="font-size:22px;font-weight:700">${esc(s.rankBySales)}</div><div class="note">Sales rank</div></div>
+      <div><div style="font-size:22px;font-weight:700">${esc(s.sales)}</div><div class="note">Beats sold</div></div>
+      <div><div style="font-size:22px;font-weight:700">${esc(s.plays)}</div><div class="note">Plays</div></div>
+      <div><div style="font-size:22px;font-weight:700">${esc(s.uniqueListeners)}</div><div class="note">Listeners</div></div>
+    </div>
+    <p class="note" style="margin-top:10px;text-align:center">${esc(rankLine)}</p>`;
 }
 function chainBadge(c) {
   if (!c) return '<span class="badge wait">On-chain status unknown</span>';

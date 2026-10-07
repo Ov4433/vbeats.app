@@ -59,3 +59,31 @@ export function rankForBeat(
     }
   );
 }
+
+export interface PlayCounts {
+  plays: Map<string, number>;
+  uniqueListeners: Map<string, number>;
+}
+
+/**
+ * Play totals + unique listeners per beat. One query for totals, one for
+ * distinct (beat, user) pairs — no N+1.
+ */
+export async function playCounts(): Promise<PlayCounts> {
+  const [totals, pairs] = await Promise.all([
+    prisma.play.groupBy({
+      by: ['beatId'],
+      _count: { beatId: true },
+    }),
+    prisma.play.groupBy({
+      by: ['beatId', 'userId'],
+      where: { userId: { not: null } },
+    }),
+  ]);
+  const plays = new Map(totals.map((t) => [t.beatId, t._count.beatId]));
+  const uniqueListeners = new Map<string, number>();
+  for (const p of pairs) {
+    uniqueListeners.set(p.beatId, (uniqueListeners.get(p.beatId) ?? 0) + 1);
+  }
+  return { plays, uniqueListeners };
+}

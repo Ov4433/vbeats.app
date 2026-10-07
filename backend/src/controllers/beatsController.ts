@@ -18,12 +18,16 @@ import {
   registerBeatOnChain,
 } from '../services/chainService';
 import { publicBaseUrl } from '../utils/baseUrl';
-import { salesRanking, rankForBeat } from '../services/rankService';
+import { salesRanking, rankForBeat, playCounts } from '../services/rankService';
 
-/** Attach back-of-the-card sales stats to a serialized beat. */
+type Ranking = Awaited<ReturnType<typeof salesRanking>>;
+type Plays = Awaited<ReturnType<typeof playCounts>>;
+
+/** Attach back-of-the-card stats to a serialized beat. */
 function withCardStats<T extends { id: string }>(
   beat: T,
-  ranking: Awaited<ReturnType<typeof salesRanking>>
+  ranking: Ranking,
+  plays: Plays
 ): T & { stats: BeatCardStats } {
   const r = rankForBeat(ranking, beat.id);
   return {
@@ -33,8 +37,14 @@ function withCardStats<T extends { id: string }>(
       rankBySales: r.rank,
       rankedBeats: ranking.rankedBeats,
       totalBeats: ranking.totalBeats,
+      plays: plays.plays.get(beat.id) ?? 0,
+      uniqueListeners: plays.uniqueListeners.get(beat.id) ?? 0,
     },
   };
+}
+
+async function cardInputs(): Promise<[Ranking, Plays]> {
+  return Promise.all([salesRanking(), playCounts()]);
 }
 
 // ---------------------------------------------------------------------------
@@ -235,9 +245,9 @@ export const marketplace = asyncHandler(async (req: Request, res: Response) => {
       take: limit,
     }),
   ]);
-  const ranking = await salesRanking();
+  const [ranking, plays] = await cardInputs();
   res.json({
-    beats: beats.map((b) => withCardStats(serializeBeat(b), ranking)),
+    beats: beats.map((b) => withCardStats(serializeBeat(b), ranking, plays)),
     total,
     page,
     limit,
@@ -271,8 +281,56 @@ export const search = asyncHandler(async (req: Request, res: Response) => {
 export const getBeat = asyncHandler(async (req: Request, res: Response) => {
   const beat = await prisma.beat.findUnique({ where: { id: req.params.id } });
   if (!beat) throw new HttpError(404, 'Beat not found');
-  const ranking = await salesRanking();
-  res.json(withCardStats(serializeBeat(beat), ranking));
+  const [ranking, plays] = await cardInputs();
+  res.json(withCardStats(serializeBeat(beat), ranking, plays));
+});
+
+// ---------------------------------------------------------------------------
+// POST /v1/beats/:id/play — record a listen. Public: logged-in listeners are
+// attributed, everyone else counts as anonymous (IP-hashed for dedupe).
+// Dedupe window: one counted play per listener per beat per 30 minutes.
+// Body: { listenedSec?: number }.
+// ---------------------------------------------------------------------------
+const PLAY_DEDUPE_MINUTES = 30;
+
+function ipHash(req: Request): string | null {
+  const ip =
+    (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
+    req.socket.remoteAddress;
+  if (!ip) return null;
+  // Daily salt keeps hashes from being a permanent fingerprint.
+  const day = new Date().toISOString().slice(0, 10);
+  return crypto.createHash('sha256').update(`${ip}|${day}|${config.jwtSecret}`).digest('hex');
+}
+
+export const recordPlay = asyncHandler(async (req: Request, res: Response) => {
+  const beat = await prisma.beat.findUnique({ where: { id: req.params.id } });
+  if (!beat) throw new HttpError(404, 'Beat not found');
+
+  const listenedSec = Math.max(
+    0,
+    Math.min(86400, Math.floor(Number(req.body?.listenedSec ?? 0) || 0))
+  );
+  const userId = req.user?.id ?? null;
+  const hash = userId ? null : ipHash(req);
+  const since = new Date(Date.now() - PLAY_DEDUPE_MINUTES * 60 * 1000);
+
+  const recent = await prisma.play.findFirst({
+    where: {
+      beatId: beat.id,
+      createdAt: { gte: since },
+      ...(userId ? { userId } : hash ? { ipHash: hash } : { id: '__never__' }),
+    },
+    select: { id: true },
+  });
+  if (recent) {
+    return res.json({ counted: false, deduped: true });
+  }
+
+  await prisma.play.create({
+    data: { beatId: beat.id, userId, ipHash: hash, listenedSec },
+  });
+  res.status(201).json({ counted: true });
 });
 
 // ---------------------------------------------------------------------------

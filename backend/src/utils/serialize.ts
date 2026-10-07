@@ -58,6 +58,10 @@ export interface BeatCardStats {
   rankedBeats: number;
   /** Total beats in the studio, for "rank #3 of 128". */
   totalBeats: number;
+  /** Total recorded plays (deduped per listener per 30 min). */
+  plays: number;
+  /** Distinct logged-in listeners. */
+  uniqueListeners: number;
 }
 
 /**

@@ -25,6 +25,7 @@ model User {
   refreshTokens RefreshToken[]
   purchases    Transaction[]  @relation("Buyer")
   sales        Transaction[]  @relation("Seller")
+  plays        Play[]
   chatMessages ChatMessage[]
 }
 
@@ -66,6 +67,7 @@ model Beat {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   transactions Transaction[]
+  plays       Play[]
 
   @@index([userId])
   @@index([genre])
@@ -89,4 +91,19 @@ model Transaction {
   @@index([buyerId])
   @@index([sellerId])
   @@index([beatId])
+}
+
+model Play {
+  id          String   @id @default(cuid())
+  beatId      String
+  beat        Beat     @relation(fields: [beatId], references: [id], onDelete: Cascade)
+  userId      String? // null = anonymous listener
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  ipHash      String? // sha256(ip + daily salt) for anonymous dedupe; never a raw IP
+  listenedSec Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  @@index([beatId])
+  @@index([userId])
+  @@index([createdAt])
 }
