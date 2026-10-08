@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Deploy — Verified Beats Studio</title>
+<link rel="icon" href="assets/logo.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<nav class="nav" id="nav"></nav>
+<main class="wrap" style="max-width:720px">
+  <div id="err"></div>
+  <div class="page-head"><div>
+    <h1>Contract deployment</h1>
+    <p>Deploys the full VBeats contract suite to Base. Your keys never leave your wallet — you sign each transaction.</p>
+  </div></div>
+
+  <div class="card" style="margin-top:16px">
+    <h3 style="margin-bottom:10px">1 · Connect the studio wallet</h3>
+    <p class="note">Use the dedicated studio wallet (<span class="mono">0xEed0867dA5d387DAE2c548A4620c43cb26a9D517</span>). It becomes the owner of every contract.</p>
+    <div style="margin-top:10px"><button class="btn" id="connect">Connect wallet</button></div>
+    <p class="note" style="margin-top:8px" id="wallet-line">Not connected.</p>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <h3 style="margin-bottom:10px">2 · Platform treasury</h3>
+    <p class="note">Receives the 25% platform cut from stake settlements. Defaults to the studio wallet.</p>
+    <div style="margin-top:10px"><input id="platform" type="text" placeholder="0x… (leave blank = studio wallet)" style="width:100%"></div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <h3 style="margin-bottom:10px">3 · Deploy</h3>
+    <p class="note">Seven contracts, in dependency order. You'll confirm each one in your wallet (~$5–15 total on Base).</p>
+    <div style="margin-top:10px"><button class="btn" id="deploy" disabled>Deploy all contracts</button></div>
+    <div id="progress" style="margin-top:12px"></div>
+  </div>
+
+  <div class="card" style="margin-top:16px;display:none" id="result-card">
+    <h3 style="margin-bottom:10px">✓ Deployed</h3>
+    <div id="result"></div>
+  </div>
+</main>
+<footer class="footer"><div class="footer-bat"><img src="assets/mascot-profile.webp" alt=""></div>Verified Beats Studio — Volt keeps the receipts.</footer>
+<script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.min.js"></script>
+<script src="js/deploy-data.js"></script>
+<script>
+const EXPECTED = '0xEed0867dA5d387DAE2c548A4620c43cb26a9D517';
+let signer = null, walletAddr = '';
+
+function log(html) {
+  const p = document.getElementById('progress');
+  p.innerHTML += html;
+}
+function setErr(m) {
+  document.getElementById('err').innerHTML = m ? '<div class="err">' + m + '</div>' : '';
+}
+
+document.getElementById('connect').onclick = async () => {
+  try {
+    setErr('');
+    if (!window.ethereum) throw new Error('No wallet found — install MetaMask and open this page in that browser.');
+    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    const net = await provider.getNetwork();
+    if (Number(net.chainId) !== 8453) {
+      await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x2105' }] });
+    }
+    signer = await provider.getSigner();
+    walletAddr = await signer.getAddress();
+    const line = document.getElementById('wallet-line');
+    if (walletAddr.toLowerCase() !== EXPECTED.toLowerCase()) {
+      line.innerHTML = 'Connected: <span class="mono">' + walletAddr + '</span><br><b>Warning:</b> this is not the studio wallet. Contracts will be owned by the connected wallet.';
+    } else {
+      line.innerHTML = 'Connected: <span class="mono">' + walletAddr + '</span> ✓ studio wallet';
+    }
+    const bal = await provider.getBalance(walletAddr);
+    line.innerHTML += '<br>Balance: ' + ethers.formatEther(bal) + ' ETH';
+    if (bal < ethers.parseEther('0.003')) {
+      line.innerHTML += ' <b>— low! Fund the wallet before deploying.</b>';
+    }
+    document.getElementById('deploy').disabled = false;
+  } catch (e) { setErr(e.message || e); }
+};
+
+const ORDER = ['BeatRegistry', 'BeatNFT', 'VouchSBT', 'BeatEscrow', 'ShardFactory', 'BeatStaking', 'BeatOffers'];
+
+document.getElementById('deploy').onclick = async () => {
+  const btn = document.getElementById('deploy');
+  try {
+    setErr('');
+    btn.disabled = true;
+    document.getElementById('progress').innerHTML = '';
+    let platform = document.getElementById('platform').value.trim();
+    if (platform && !ethers.isAddress(platform)) throw new Error('Platform address is not valid.');
+    if (!platform) platform = walletAddr;
+
+    const addrs = {};
+    for (const name of ORDER) {
+      const { abi, bytecode } = window.VBEATS_DEPLOY.contracts[name];
+      const factory = new ethers.ContractFactory(abi, bytecode, signer);
+      let args = [];
+      if (name === 'BeatNFT') args = [addrs.BeatRegistry];
+      if (name === 'BeatEscrow') args = [addrs.VouchSBT];
+      if (name === 'BeatStaking') args = [addrs.BeatRegistry, addrs.VouchSBT, platform];
+      if (name === 'BeatOffers') args = [addrs.BeatRegistry, addrs.VouchSBT];
+      log('<p class="note">Deploying <b>' + name + '</b> — confirm in your wallet…</p>');
+      const c = await factory.deploy(...args);
+      await c.waitForDeployment();
+      const addr = await c.getAddress();
+      addrs[name] = addr;
+      log('<p class="mono" style="color:var(--ok)">✓ ' + name + ' → ' + addr + '</p>');
+    }
+
+    const env = [
+      'RPC_URL=https://mainnet.base.org',
+      'BEAT_REGISTRY_ADDRESS=' + addrs.BeatRegistry,
+      'BEAT_NFT_ADDRESS=' + addrs.BeatNFT,
+      'VOUCH_ADDRESS=' + addrs.VouchSBT,
+      'BEAT_ESCROW_ADDRESS=' + addrs.BeatEscrow,
+      'SHARD_FACTORY_ADDRESS=' + addrs.ShardFactory,
+      'BEAT_STAKING_ADDRESS=' + addrs.BeatStaking,
+      'BEAT_OFFERS_ADDRESS=' + addrs.BeatOffers,
+      'PLATFORM_ADDRESS=' + platform,
+    ].join('\n');
+    const siteCfg = [
+      '// top of web/js/api.js',
+      "window.VBEATS_REGISTRY_ADDRESS = '" + addrs.BeatRegistry + "';",
+      "window.VBEATS_NFT_ADDRESS = '" + addrs.BeatNFT + "';",
+      "window.VBEATS_OFFERS_ADDRESS = '" + addrs.BeatOffers + "';",
+    ].join('\n');
+    document.getElementById('result-card').style.display = '';
+    document.getElementById('result').innerHTML =
+      '<p class="note">Send this block to Muse — it wires up Render and the site:</p>' +
+      '<pre class="mono" style="white-space:pre-wrap;font-size:12px">' + env + '\n\n' + siteCfg + '</pre>';
+    log('<p class="note"><b>All seven contracts are live on Base.</b> Copy the block above to Muse.</p>');
+  } catch (e) {
+    setErr('Deployment stopped: ' + (e.message || e) + '. Already-deployed contracts above are fine — re-run to continue.');
+    btn.disabled = false;
+  }
+};
+</script>
+<script src="js/api.js"></script>
+<script>nav('');</script>
+</body>
+</html>
