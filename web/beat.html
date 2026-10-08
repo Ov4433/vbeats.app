@@ -14,16 +14,20 @@
   <div id="beat"></div>
 </main>
 <footer class="footer"><div class="footer-bat"><img src="assets/mascot-profile.webp" alt=""></div>Verified Beats Studio — Volt keeps the receipts.</footer>
+<script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.min.js"></script>
 <script src="js/api.js"></script>
 <script src="js/volt.js"></script>
 <script>
 nav('');
 const id = new URLSearchParams(location.search).get('id');
+let currentBeat = null;
+let currentOffers = [];
 
 async function load() {
   if (!id) { showErr('err', 'No beat id given.'); return; }
   try {
     const b = await api.beat(id);
+    currentBeat = b;
     const v = await api.verify(id).catch(() => null);
     // verify returns a flat shape: { verified, fingerprint, onChain, chainConfigured, chainOwner? }
     const chain = v ? { onChain: v.onChain, configured: v.chainConfigured, owner: v.chainOwner } : null;
@@ -45,6 +49,18 @@ async function load() {
       <div class="card" style="margin-top:16px">
         <h3 style="margin-bottom:10px">🤝 Offers</h3>
         <div id="offers"><span class="badge wait">Checking…</span></div>
+        <div id="make-offer" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)">
+          <h4 style="margin-bottom:8px">Make an offer</h4>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end">
+            <label class="note">Leases<br><input id="off-amount" type="number" value="1" min="1" style="width:70px"></label>
+            <label class="note">ETH<br><input id="off-eth" type="number" step="0.01" min="0" placeholder="0.5" style="width:90px"></label>
+            <label class="note">Days<br><input id="off-days" type="number" value="7" min="1" max="90" style="width:60px"></label>
+            <label class="note"><input id="off-exclusive" type="checkbox"> 1-of-1 exclusive</label>
+            <label class="note"><input id="off-final" type="checkbox"> final (24h)</label>
+            <button class="btn small" id="off-submit">Send offer</button>
+          </div>
+          <p class="note" style="margin-top:6px">ETH is locked in the contract until accepted, rejected, cancelled, or expired.</p>
+        </div>
         <div id="volt-nudge" style="display:none;margin-top:12px"></div>
       </div>
       <div class="card" style="margin-top:16px">
@@ -118,19 +134,58 @@ async function loadOffers() {
       return;
     }
     const live = d.offers.filter(o => o.active);
+    currentOffers = live;
+    const me = (api.wallet || '').toLowerCase();
+    let producer = null;
+    try { producer = await api.producerOf(currentBeat.fingerprint); } catch {}
+    const isProducer = me && producer && me === producer.toLowerCase();
+
+    // Make-an-offer form (needs the NFT contract address + a connected wallet).
+    const form = document.getElementById('make-offer');
+    if (form) {
+      if (window.VBEATS_NFT_ADDRESS && window.VBEATS_OFFERS_ADDRESS) {
+        form.style.display = '';
+        document.getElementById('off-submit').onclick = submitOffer;
+      } else {
+        form.style.display = 'none';
+      }
+    }
+
     if (!live.length) {
       el.innerHTML = '<p class="note">No active offers — be the first to make one.</p>';
-      return;
+    } else {
+      el.innerHTML = live.map(o => {
+        const mine = me && o.buyer.toLowerCase() === me;
+        const btns = [];
+        const b = (label, act) => `<button class="btn ghost small" data-act="${act}" data-id="${o.offerId}">${label}</button>`;
+        if (mine) {
+          btns.push(b('Raise', 'raise'), b('Lower', 'lower'));
+          if (!o.isFinal) btns.push(b('Make final', 'final'));
+          if (o.askEth) btns.push(b('Accept ask', 'acceptAsk'));
+          btns.push(b('Cancel', 'cancel'));
+        }
+        if (isProducer) {
+          btns.push(b('Accept', 'accept'), b('Counter', 'counter'), b('Final counter', 'counterFinal'));
+          if (o.askEth) btns.push(b('Withdraw ask', 'withdrawAsk'));
+          btns.push(b('Reject', 'reject'));
+        }
+        return `
+        <div style="padding:10px 0;border-top:1px solid var(--line)">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+            <span><b>${o.exclusive ? '1-of-1 exclusive' : esc(o.amount) + ' leases'}</b>
+              ${o.isFinal ? '<span class="badge no" style="margin-left:6px">FINAL \u00b7 24h</span>' : ''}
+              ${mine ? '<span class="badge ok" style="margin-left:6px">yours</span>' : ''}</span>
+            <span class="mono">${esc(o.bidEth)} ETH${o.askEth ? ' \u2192 ask ' + esc(o.askEth) + ' ETH' : ''}</span>
+          </div>
+          <p class="note" style="margin-top:4px">${o.rounds} round${o.rounds === 1 ? '' : 's'} \u00b7 expires ${esc(new Date(o.expiresAt).toLocaleString())}</p>
+          ${btns.length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">${btns.join('')}</div>` : ''}
+        </div>`;
+      }).join('');
+      el.querySelectorAll('[data-act]').forEach(btn => {
+        btn.onclick = () => offerAction(btn.dataset.act, btn.dataset.id, btn);
+      });
     }
-    el.innerHTML = live.map(o => `
-      <div style="padding:10px 0;border-top:1px solid var(--line)">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
-          <span><b>${o.exclusive ? '1-of-1 exclusive' : esc(o.amount) + ' leases'}</b>
-            ${o.isFinal ? '<span class="badge no" style="margin-left:6px">FINAL · 24h</span>' : ''}</span>
-          <span class="mono">${esc(o.bidEth)} ETH${o.askEth ? ' → ask ' + esc(o.askEth) + ' ETH' : ''}</span>
-        </div>
-        <p class="note" style="margin-top:4px">${o.rounds} round${o.rounds === 1 ? '' : 's'} · expires ${esc(new Date(o.expiresAt).toLocaleString())}</p>
-      </div>`).join('');
+
     // Volt's nudge: a stalled negotiation gets a quiet suggestion.
     const stalled = live.find(o => o.stalled);
     const nudge = document.getElementById('volt-nudge');
@@ -139,12 +194,110 @@ async function loadOffers() {
       nudge.innerHTML = `
         <div class="mascot-says">
           <img src="assets/mascot-profile.webp" alt="">
-          <div class="bubble">🦇 This one's gone quiet — ${stalled.rounds} rounds, no movement for over a day.
+          <div class="bubble">\U0001F987 This one's gone quiet \u2014 ${stalled.rounds} rounds, no movement for over a day.
           A <b>final offer</b> (24 hours, take-it-or-leave-it) is usually what closes it.</div>
         </div>`;
     }
   } catch { el.innerHTML = '<span class="badge wait">Could not load offers</span>'; }
 }
+
+function askEth(msg, def) {
+  const v = prompt(msg, def || '');
+  if (v === null) throw { cancelled: true };
+  const n = Number(v);
+  if (!isFinite(n) || n <= 0) throw new Error('Enter an amount in ETH');
+  return v;
+}
+
+async function offerAction(act, offerId, btn) {
+  const o = currentOffers.find(x => x.offerId === String(offerId));
+  if (!o) return;
+  const done = async (fn) => {
+    const label = btn.textContent;
+    try {
+      btn.disabled = true;
+      btn.textContent = 'Confirm in wallet\u2026';
+      await fn();
+      await loadOffers();
+    } catch (e) {
+      if (!e || !e.cancelled) alert(e.message || e);
+      btn.disabled = false;
+      btn.textContent = label;
+    }
+  };
+  try {
+    switch (act) {
+      case 'raise': {
+        const v = askEth('Raise your bid by how much (ETH)?');
+        await done(() => api.offerTx('raiseOffer', [offerId], ethers.parseEther(v)));
+        break;
+      }
+      case 'lower': {
+        const v = askEth(`Lower your bid to how much (ETH)? Current: ${o.bidEth}`);
+        await done(() => api.offerTx('lowerOffer', [offerId, ethers.parseEther(v)]));
+        break;
+      }
+      case 'final':
+        if (!confirm('Make this FINAL? Take-it-or-leave-it, 24-hour fuse.')) break;
+        await done(() => api.offerTx('markBidFinal', [offerId]));
+        break;
+      case 'acceptAsk': {
+        const top = ethers.parseEther(o.askEth) - ethers.parseEther(o.bidEth);
+        await done(() => api.offerTx('acceptAsk', [offerId], top > 0n ? top : undefined));
+        break;
+      }
+      case 'cancel':
+        if (!confirm('Cancel your offer? Your ETH is refunded.')) break;
+        await done(() => api.offerTx('cancelOffer', [offerId]));
+        break;
+      case 'accept':
+        if (!confirm(`Accept ${o.bidEth} ETH for ${o.exclusive ? 'the 1-of-1 exclusive' : o.amount + ' leases'}?`)) break;
+        await done(() => api.offerTx('acceptOffer', [offerId]));
+        break;
+      case 'counter': {
+        const v = askEth(`Your counter-ask (ETH)? Their bid: ${o.bidEth}`);
+        await done(() => api.offerTx('counterOffer', [offerId, ethers.parseEther(v)]));
+        break;
+      }
+      case 'counterFinal': {
+        const v = askEth(`Your FINAL ask (ETH)? 24-hour fuse. Their bid: ${o.bidEth}`);
+        await done(() => api.offerTx('counterFinal', [offerId, ethers.parseEther(v)]));
+        break;
+      }
+      case 'withdrawAsk':
+        await done(() => api.offerTx('withdrawAsk', [offerId]));
+        break;
+      case 'reject':
+        if (!confirm('Reject this offer? Their ETH is refunded.')) break;
+        await done(() => api.offerTx('rejectOffer', [offerId]));
+        break;
+    }
+  } catch (e) { if (!e || !e.cancelled) alert(e.message || e); }
+}
+
+async function submitOffer() {
+  try {
+    if (!window.VBEATS_NFT_ADDRESS) throw new Error('NFT contract is not deployed yet');
+    const exclusive = document.getElementById('off-exclusive').checked;
+    const amount = exclusive ? 1 : Math.max(1, parseInt(document.getElementById('off-amount').value) || 1);
+    const eth = document.getElementById('off-eth').value;
+    const days = Math.min(90, Math.max(1, parseInt(document.getElementById('off-days').value) || 7));
+    const final = document.getElementById('off-final').checked;
+    if (!eth || !isFinite(Number(eth)) || Number(eth) <= 0) throw new Error('Enter an offer amount in ETH');
+    if (!currentBeat || !currentBeat.fingerprint) throw new Error('Beat not loaded yet');
+    const fp = api.fpHex(currentBeat.fingerprint);
+    const value = ethers.parseEther(eth);
+    const signer = await api.getSigner();
+    const c = api.offersContract(signer);
+    const tx = final
+      ? await c.makeFinalOffer(window.VBEATS_NFT_ADDRESS, fp, exclusive, amount, { value })
+      : await c.makeOffer(window.VBEATS_NFT_ADDRESS, fp, exclusive, amount, days * 86400, { value });
+    await tx.wait();
+    document.getElementById('off-eth').value = '';
+    await loadOffers();
+  } catch (e) { alert(e.message || e); }
+}
+
 loadOffers();
 loadNft();
 load();

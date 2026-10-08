@@ -1,6 +1,30 @@
 /* Verified Beats Studio — shared API client + nav */
 window.VBEATS_API = window.VBEATS_API || 'https://vbeats-api.onrender.com';
 
+// --- Chain config (Base mainnet). Contract addresses are empty until deploy. ---
+window.VBEATS_CHAIN_ID = window.VBEATS_CHAIN_ID || 8453;
+window.VBEATS_RPC_URL = window.VBEATS_RPC_URL || 'https://mainnet.base.org';
+window.VBEATS_REGISTRY_ADDRESS = window.VBEATS_REGISTRY_ADDRESS || '';
+window.VBEATS_NFT_ADDRESS = window.VBEATS_NFT_ADDRESS || '';
+window.VBEATS_OFFERS_ADDRESS = window.VBEATS_OFFERS_ADDRESS || '';
+
+// Minimal BeatOffers ABI for the actions the site performs.
+const BEAT_OFFERS_ABI = [
+  'function makeOffer(address nft, bytes32 fingerprint, bool exclusive, uint256 amount, uint64 durationSeconds) payable returns (uint256)',
+  'function makeFinalOffer(address nft, bytes32 fingerprint, bool exclusive, uint256 amount) payable returns (uint256)',
+  'function raiseOffer(uint256 offerId) payable',
+  'function lowerOffer(uint256 offerId, uint256 newBidWei)',
+  'function counterOffer(uint256 offerId, uint256 askPriceWei)',
+  'function counterFinal(uint256 offerId, uint256 askPriceWei)',
+  'function withdrawAsk(uint256 offerId)',
+  'function acceptOffer(uint256 offerId)',
+  'function acceptAsk(uint256 offerId) payable',
+  'function markBidFinal(uint256 offerId)',
+  'function cancelOffer(uint256 offerId)',
+  'function rejectOffer(uint256 offerId)',
+  'function reclaimExpired(uint256 offerId)',
+];
+
 const api = {
   base: window.VBEATS_API,
   get token() { return localStorage.getItem('vbeats_token') || ''; },
@@ -70,6 +94,86 @@ const api = {
     if (u && /^https?:\/\//.test(u)) return u;
     return 'assets/logo.png';
   },
+
+  // --- Wallet (MetaMask / any injected EIP-1193 provider) ---
+  get wallet() { return localStorage.getItem('vbeats_wallet') || ''; },
+  set wallet(a) { a ? localStorage.setItem('vbeats_wallet', a) : localStorage.removeItem('vbeats_wallet'); },
+
+  async connectWallet() {
+    if (!window.ethereum) throw new Error('No wallet found — install MetaMask');
+    if (typeof ethers === 'undefined') throw new Error('Wallet library failed to load — check your connection');
+    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+    if (!accounts || !accounts.length) throw new Error('No accounts authorized');
+    await this.ensureBaseChain();
+    this.wallet = accounts[0];
+    return accounts[0];
+  },
+
+  disconnectWallet() { this.wallet = ''; },
+
+  async ensureBaseChain() {
+    const chainIdHex = '0x' + Number(window.VBEATS_CHAIN_ID).toString(16);
+    try {
+      await window.ethereum.request({
+        method: 'wallet_switchEthereumChain', params: [{ chainId: chainIdHex }],
+      });
+    } catch (e) {
+      if (e && e.code === 4902) {
+        await window.ethereum.request({
+          method: 'wallet_addEthereumChain',
+          params: [{
+            chainId: chainIdHex, chainName: 'Base',
+            nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+            rpcUrls: [window.VBEATS_RPC_URL], blockExplorerUrls: ['https://basescan.org'],
+          }],
+        });
+      } else { throw e; }
+    }
+  },
+
+  async getSigner() {
+    if (!this.wallet) throw new Error('Connect your wallet first');
+    if (!window.ethereum) throw new Error('No wallet found');
+    if (typeof ethers === 'undefined') throw new Error('Wallet library failed to load');
+    await this.ensureBaseChain();
+    return new ethers.BrowserProvider(window.ethereum).getSigner();
+  },
+
+  offersContract(signerOrProvider) {
+    if (!window.VBEATS_OFFERS_ADDRESS) throw new Error('Offers contract is not deployed yet');
+    if (typeof ethers === 'undefined') throw new Error('Wallet library failed to load');
+    return new ethers.Contract(window.VBEATS_OFFERS_ADDRESS, BEAT_OFFERS_ABI, signerOrProvider);
+  },
+
+  /** On-chain producer (beat owner) for a fingerprint, via the registry. */
+  async producerOf(fingerprint) {
+    if (!window.VBEATS_REGISTRY_ADDRESS || !fingerprint) return null;
+    if (typeof ethers === 'undefined') throw new Error('Wallet library failed to load');
+    try {
+      const provider = new ethers.JsonRpcProvider(window.VBEATS_RPC_URL);
+      const reg = new ethers.Contract(
+        window.VBEATS_REGISTRY_ADDRESS,
+        ['function getBeat(bytes32) view returns (address owner, uint256 timestamp, string metadataURI)'],
+        provider
+      );
+      const fp = fingerprint.startsWith('0x') ? fingerprint : '0x' + fingerprint;
+      return (await reg.getBeat(fp)).owner;
+    } catch { return null; }
+  },
+
+  fpHex(fingerprint) {
+    return fingerprint.startsWith('0x') ? fingerprint : '0x' + fingerprint;
+  },
+
+  /** Send an offer-contract transaction and wait for it to mine. */
+  async offerTx(method, args, valueWei) {
+    const signer = await this.getSigner();
+    const c = this.offersContract(signer);
+    const overrides = valueWei ? { value: valueWei } : {};
+    const tx = await c[method](...args, overrides);
+    await tx.wait();
+    return tx.hash;
+  },
 };
 
 function nav(active) {
@@ -88,14 +192,42 @@ function nav(active) {
 }
 
 function renderUser() {
-  const box = document.getElementBy('nav-user') || document.getElementById('nav-user');
+  const box = document.getElementById('nav-user');
   if (!box) return;
+  let html = '';
   if (api.loggedIn()) {
-    box.innerHTML = '<span>Signed in</span> <button class="btn ghost small" id="logout">Log out</button>';
-    document.getElementById('logout').onclick = () => { api.logout(); location.reload(); };
+    html += '<span>Signed in</span> <button class="btn ghost small" id="logout">Log out</button>';
   } else {
-    box.innerHTML = '<a class="btn ghost small" href="upload.html">Sign in</a>';
+    html += '<a class="btn ghost small" href="upload.html">Sign in</a>';
   }
+  const w = api.wallet;
+  html += w
+    ? ` <button class="btn ghost small" id="wallet-btn" title="${esc(w)} \u2014 tap to disconnect">${esc(w.slice(0, 6))}\u2026${esc(w.slice(-4))}</button>`
+    : ' <button class="btn small" id="wallet-btn">Connect wallet</button>';
+  box.innerHTML = html;
+  const lo = document.getElementById('logout');
+  if (lo) lo.onclick = () => { api.logout(); location.reload(); };
+  document.getElementById('wallet-btn').onclick = async () => {
+    try {
+      if (api.wallet) {
+        if (confirm('Disconnect wallet ' + api.wallet + '?')) {
+          api.disconnectWallet();
+          renderUser();
+        }
+      } else {
+        await api.connectWallet();
+        renderUser();
+      }
+    } catch (e) { alert(e.message); }
+  };
+}
+
+// Keep the nav button in sync when the user switches accounts.
+if (window.ethereum && window.ethereum.on) {
+  window.ethereum.on('accountsChanged', (accounts) => {
+    api.wallet = (accounts && accounts[0]) || '';
+    renderUser();
+  });
 }
 
 function esc(s) {
