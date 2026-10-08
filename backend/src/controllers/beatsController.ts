@@ -19,6 +19,7 @@ import {
 } from '../services/chainService';
 import { publicBaseUrl } from '../utils/baseUrl';
 import { salesRanking, rankForBeat, playCounts } from '../services/rankService';
+import { beatOffers } from '../services/offerService';
 
 type Ranking = Awaited<ReturnType<typeof salesRanking>>;
 type Plays = Awaited<ReturnType<typeof playCounts>>;
@@ -283,6 +284,12 @@ export const getBeat = asyncHandler(async (req: Request, res: Response) => {
   if (!beat) throw new HttpError(404, 'Beat not found');
   const [ranking, plays] = await cardInputs();
   res.json(withCardStats(serializeBeat(beat), ranking, plays));
+});
+
+export const beatOffersInfo = asyncHandler(async (req: Request, res: Response) => {
+  const beat = await prisma.beat.findUnique({ where: { id: req.params.id } });
+  if (!beat) throw new HttpError(404, 'Beat not found');
+  res.json(await beatOffers(beat.fingerprint));
 });
 
 // ---------------------------------------------------------------------------

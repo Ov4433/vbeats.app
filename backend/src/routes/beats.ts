@@ -11,6 +11,7 @@ import {
   uploadBeat,
   verifyBeat,
   beatNftInfo,
+  beatOffersInfo,
   recordPlay,
 } from '../controllers/beatsController';
 import { requireAuth, optionalAuth } from '../middleware/auth';
@@ -20,9 +21,11 @@ import { beatCreateSchema, beatUpdateSchema } from '../schemas';
 const router = Router();
 
 // Public: beat detail doubles as the NFT token URI (marketplaces fetch it
-// without credentials), and play tracking counts anonymous listeners.
+// without credentials), play tracking counts anonymous listeners, and the
+// offers feed is public negotiation state.
 router.post('/:id/play', optionalAuth, recordPlay);
 router.get('/:id', getBeat);
+router.get('/:id/offers', beatOffersInfo);
 
 router.use(requireAuth);
 

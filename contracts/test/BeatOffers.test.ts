@@ -283,6 +283,82 @@ describe("BeatOffers — buyers send offers", function () {
       .to.emit(offers, "OfferAccepted");
   });
 
+  it("final offers: buyer escalates to take-it-or-leave-it with a 24h fuse", async function () {
+    const { offers, producer, buyer, offerId } = await leaseOffered(); // 7-day bid
+
+    await expect(offers.connect(buyer).markBidFinal(offerId))
+      .to.emit(offers, "OfferFinalized");
+
+    const o = await offers.offers(offerId);
+    expect(o.isFinal).to.equal(true);
+    // Fuse shortened from 7 days to ~24h.
+    const now = (await ethers.provider.getBlock("latest"))!.timestamp;
+    expect(Number(o.expiresAt)).to.be.lessThan(now + 7 * 24 * 3600);
+    expect(Number(o.expiresAt)).to.be.greaterThan(now + 23 * 3600);
+
+    // Can't go final twice.
+    await expect(offers.connect(buyer).markBidFinal(offerId)).to.be.revertedWith(
+      "BeatOffers: already final"
+    );
+
+    // Past the fuse the deal is dead; buyer reclaims.
+    await warpDays(2);
+    await expect(
+      offers.connect(producer).acceptOffer(offerId)
+    ).to.be.revertedWith("BeatOffers: expired");
+    await expect(offers.connect(buyer).reclaimExpired(offerId)).to.emit(
+      offers,
+      "OfferExpired"
+    );
+  });
+
+  it("producer counters final: 24h ask, take it or leave it", async function () {
+    const { offers, producer, buyer, offerId } = await leaseOffered(); // 1.5 ETH bid
+
+    const ask = ethers.parseEther("2");
+    await expect(offers.connect(producer).counterFinal(offerId, ask))
+      .to.emit(offers, "AskPlaced")
+      .withArgs(offerId, ask);
+    const o = await offers.offers(offerId);
+    expect(o.isFinal).to.equal(true);
+
+    // Buyer meets the final ask within the fuse.
+    await expect(offers.connect(buyer).acceptAsk(offerId, { value: ask - ethers.parseEther("1.5") }))
+      .to.emit(offers, "OfferAccepted")
+      .withArgs(offerId, producer.address, ask);
+  });
+
+  it("final ask at or below the bid executes immediately", async function () {
+    const { nft, offers, producer, buyer, offerId } = await leaseOffered(); // 1.5 ETH bid
+    const leaseId = await nft.leaseTokenId(fingerprint);
+    await expect(offers.connect(producer).counterFinal(offerId, ethers.parseEther("1")))
+      .to.emit(offers, "OfferAccepted");
+    expect(await nft.balanceOf(buyer.address, leaseId)).to.equal(5);
+  });
+
+  it("buyers can open with a final offer directly", async function () {
+    const { nft, offers, vouch, studio, producer, buyer } = await deploy();
+    await vouch.connect(studio).issue(buyer.address);
+    const nftAddr = await nft.getAddress();
+    const bid = ethers.parseEther("1");
+
+    const offerId = await offers
+      .connect(buyer)
+      .makeFinalOffer.staticCall(nftAddr, fingerprint, false, 5, { value: bid });
+    await expect(
+      offers.connect(buyer).makeFinalOffer(nftAddr, fingerprint, false, 5, { value: bid })
+    ).to.emit(offers, "OfferFinalized");
+
+    const o = await offers.offers(offerId);
+    expect(o.isFinal).to.equal(true);
+    const now = (await ethers.provider.getBlock("latest"))!.timestamp;
+    expect(Number(o.expiresAt) - now).to.be.lessThan(25 * 3600);
+
+    // Producer takes it inside the fuse.
+    await offers.connect(producer).acceptOffer(offerId);
+    expect(await nft.balanceOf(buyer.address, await nft.leaseTokenId(fingerprint))).to.equal(5);
+  });
+
   it("rejects zero-value and out-of-range offers", async function () {
     const { nft, offers, vouch, studio, buyer } = await deploy();
     await vouch.connect(studio).issue(buyer.address);

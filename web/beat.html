@@ -43,6 +43,11 @@ async function load() {
         <p id="nftline"><span class="badge wait">Checking…</span></p>
       </div>
       <div class="card" style="margin-top:16px">
+        <h3 style="margin-bottom:10px">🤝 Offers</h3>
+        <div id="offers"><span class="badge wait">Checking…</span></div>
+        <div id="volt-nudge" style="display:none;margin-top:12px"></div>
+      </div>
+      <div class="card" style="margin-top:16px">
         <h3 style="margin-bottom:10px">📊 Card back</h3>
         <div id="cardback">${cardBack(b.stats)}</div>
       </div>
@@ -103,6 +108,44 @@ async function loadNft() {
       <p class="note">ERC-1155 · lease editions + 1-of-1 exclusive · 10% producer royalty</p>`;
   } catch { /* leave the "Checking…" badge */ }
 }
+async function loadOffers() {
+  const el = document.getElementById('offers');
+  if (!el) return;
+  try {
+    const d = await api.offers(id);
+    if (!d.configured) {
+      el.innerHTML = '<span class="badge wait">Offers go live when the contract deploys</span>';
+      return;
+    }
+    const live = d.offers.filter(o => o.active);
+    if (!live.length) {
+      el.innerHTML = '<p class="note">No active offers — be the first to make one.</p>';
+      return;
+    }
+    el.innerHTML = live.map(o => `
+      <div style="padding:10px 0;border-top:1px solid var(--line)">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+          <span><b>${o.exclusive ? '1-of-1 exclusive' : esc(o.amount) + ' leases'}</b>
+            ${o.isFinal ? '<span class="badge no" style="margin-left:6px">FINAL · 24h</span>' : ''}</span>
+          <span class="mono">${esc(o.bidEth)} ETH${o.askEth ? ' → ask ' + esc(o.askEth) + ' ETH' : ''}</span>
+        </div>
+        <p class="note" style="margin-top:4px">${o.rounds} round${o.rounds === 1 ? '' : 's'} · expires ${esc(new Date(o.expiresAt).toLocaleString())}</p>
+      </div>`).join('');
+    // Volt's nudge: a stalled negotiation gets a quiet suggestion.
+    const stalled = live.find(o => o.stalled);
+    const nudge = document.getElementById('volt-nudge');
+    if (stalled && nudge) {
+      nudge.style.display = '';
+      nudge.innerHTML = `
+        <div class="mascot-says">
+          <img src="assets/mascot-profile.webp" alt="">
+          <div class="bubble">🦇 This one's gone quiet — ${stalled.rounds} rounds, no movement for over a day.
+          A <b>final offer</b> (24 hours, take-it-or-leave-it) is usually what closes it.</div>
+        </div>`;
+    }
+  } catch { el.innerHTML = '<span class="badge wait">Could not load offers</span>'; }
+}
+loadOffers();
 loadNft();
 load();
 </script>

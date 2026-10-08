@@ -42,6 +42,7 @@ contract BeatOffers is ERC1155Holder, Ownable, ReentrancyGuard {
         uint256 amount; // licenses wanted (1 for the exclusive)
         uint256 priceWei; // total ETH locked = buyer's current bid
         uint256 askPriceWei; // producer's counter-ask, 0 = none
+        bool isFinal; // take-it-or-leave-it: shortened fuse, Volt presents it
         uint64 expiresAt;
         bool active;
     }
@@ -64,6 +65,8 @@ contract BeatOffers is ERC1155Holder, Ownable, ReentrancyGuard {
     event BidUpdated(uint256 indexed offerId, uint256 newBidWei);
     event AskPlaced(uint256 indexed offerId, uint256 askPriceWei);
     event AskWithdrawn(uint256 indexed offerId);
+    /// @notice A bid/ask went final: 24h take-it-or-leave-it fuse.
+    event OfferFinalized(uint256 indexed offerId, uint64 expiresAt);
 
     constructor(address registry_, address vouch_) Ownable(msg.sender) {
         require(registry_ != address(0), "BeatOffers: zero registry");
@@ -98,9 +101,54 @@ contract BeatOffers is ERC1155Holder, Ownable, ReentrancyGuard {
         uint256 amount,
         uint64 durationSeconds
     ) external payable returns (uint256) {
+        return
+            _makeOffer(
+                msg.sender,
+                nft,
+                fingerprint,
+                exclusive,
+                amount,
+                durationSeconds,
+                msg.value
+            );
+    }
+
+    /// @notice Buyer opens with a FINAL offer straight away: take-it-or-leave-it,
+    /// 24-hour fuse.
+    function makeFinalOffer(
+        address nft,
+        bytes32 fingerprint,
+        bool exclusive,
+        uint256 amount
+    ) external payable returns (uint256) {
+        uint256 offerId = _makeOffer(
+            msg.sender,
+            nft,
+            fingerprint,
+            exclusive,
+            amount,
+            FINAL_FUSE,
+            msg.value
+        );
+        Offer storage o = offers[offerId];
+        o.isFinal = true;
+        emit OfferFinalized(offerId, o.expiresAt);
+        return offerId;
+    }
+
+    /// @dev Shared offer-creation logic (internal so msg.sender is the buyer).
+    function _makeOffer(
+        address buyer,
+        address nft,
+        bytes32 fingerprint,
+        bool exclusive,
+        uint256 amount,
+        uint64 durationSeconds,
+        uint256 valueWei
+    ) internal returns (uint256) {
         require(registry.isRegistered(fingerprint), "BeatOffers: beat not registered");
-        require(vouch.isVerified(msg.sender), "BeatOffers: buyer not verified");
-        require(msg.value > 0, "BeatOffers: zero offer");
+        require(vouch.isVerified(buyer), "BeatOffers: buyer not verified");
+        require(valueWei > 0, "BeatOffers: zero offer");
         require(
             durationSeconds >= 1 hours && durationSeconds <= 90 days,
             "BeatOffers: bad duration"
@@ -113,23 +161,24 @@ contract BeatOffers is ERC1155Holder, Ownable, ReentrancyGuard {
 
         uint256 offerId = _nextOfferId++;
         Offer storage o = offers[offerId];
-        o.buyer = msg.sender;
+        o.buyer = buyer;
         o.nft = nft;
         o.fingerprint = fingerprint;
         o.exclusive = exclusive;
         o.amount = amount;
-        o.priceWei = msg.value;
+        o.priceWei = valueWei;
         o.askPriceWei = 0;
+        o.isFinal = false;
         o.expiresAt = uint64(block.timestamp) + durationSeconds;
         o.active = true;
 
         emit OfferMade(
             offerId,
             fingerprint,
-            msg.sender,
+            buyer,
             exclusive,
             amount,
-            msg.value,
+            valueWei,
             o.expiresAt
         );
         return offerId;
@@ -219,6 +268,49 @@ contract BeatOffers is ERC1155Holder, Ownable, ReentrancyGuard {
         require(o.askPriceWei > 0, "BeatOffers: no ask");
         o.askPriceWei = 0;
         emit AskWithdrawn(offerId);
+    }
+
+    /// @notice Final-offer fuse: 24 hours, take it or leave it.
+    uint64 public constant FINAL_FUSE = 24 hours;
+
+    /// @dev Shorten an offer's expiry to the final fuse. Never extends it.
+    function _applyFinalFuse(Offer storage o, uint256 offerId) internal {
+        o.isFinal = true;
+        uint64 fuseEnd = uint64(block.timestamp) + FINAL_FUSE;
+        if (fuseEnd < o.expiresAt) {
+            o.expiresAt = fuseEnd;
+        }
+        emit OfferFinalized(offerId, o.expiresAt);
+    }
+
+    /// @notice Buyer escalates their bid to FINAL: take-it-or-leave-it,
+    /// 24-hour fuse. This is the move Volt suggests when talks stall.
+    function markBidFinal(uint256 offerId) external {
+        Offer storage o = offers[offerId];
+        require(o.active, "BeatOffers: inactive");
+        require(block.timestamp <= o.expiresAt, "BeatOffers: expired");
+        require(msg.sender == o.buyer, "BeatOffers: not the buyer");
+        require(!o.isFinal, "BeatOffers: already final");
+        _applyFinalFuse(o, offerId);
+    }
+
+    /// @notice Producer counters with a FINAL ask: 24-hour fuse. If the
+    /// final ask is at or below the locked bid, the deal executes
+    /// immediately at the ask price.
+    function counterFinal(uint256 offerId, uint256 askPriceWei) external nonReentrant {
+        Offer storage o = offers[offerId];
+        require(o.active, "BeatOffers: inactive");
+        require(block.timestamp <= o.expiresAt, "BeatOffers: expired");
+        require(msg.sender == _producerOf(o), "BeatOffers: not the beat owner");
+        require(!o.isFinal, "BeatOffers: already final");
+        require(askPriceWei > 0, "BeatOffers: zero ask");
+        if (askPriceWei <= o.priceWei) {
+            _settle(o, offerId, askPriceWei);
+        } else {
+            o.askPriceWei = askPriceWei;
+            emit AskPlaced(offerId, askPriceWei);
+            _applyFinalFuse(o, offerId);
+        }
     }
 
     /// @notice Buyer meets the producer's ask: tops up the difference when

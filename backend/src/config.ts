@@ -32,6 +32,7 @@ export const config = {
   rpcUrl: process.env.RPC_URL ?? '',
   beatRegistryAddress: process.env.BEAT_REGISTRY_ADDRESS ?? '',
   beatNftAddress: process.env.BEAT_NFT_ADDRESS ?? '',
+  beatOffersAddress: process.env.BEAT_OFFERS_ADDRESS ?? '',
   // Relayer wallet private key for register-on-upload. When set (and the
   // RPC/contract vars above are set), each upload fires a registerBeat tx.
   // Leave empty to disable on-chain writes entirely.
