@@ -9,15 +9,35 @@ interface IVouch {
     function isVerified(address account) external view returns (bool);
 }
 
+interface ICollabRegistry {
+    function getCollab(bytes32 takeFingerprint)
+        external
+        view
+        returns (
+            bytes32 beatFingerprint,
+            address producer,
+            address rapper,
+            uint16 producerShareBps,
+            bool approved
+        );
+}
+
 /// @title BeatEscrow — the verified lane for BeatNFT sales.
 /// @notice The on-chain version of "the coin goes out and comes back": the
 /// producer lists licenses (deposited here, tagged with the beat's
 /// fingerprint as the lot#), a VOUCH-holding buyer locks the exact ETH, and
-/// `settle` atomically swaps NFT -> buyer and ETH -> producer in one call.
+/// `settle` atomically swaps NFT -> buyer and ETH -> the payees in one call.
+/// Every settlement takes the platform fee off the top, then — when the lot
+/// is an approved collab take — splits the remainder between producer and
+/// rapper per the CollabRegistry terms. Nobody trusts anyone's math.
 /// Either side can unwind before settlement. Works for lease batches and for
 /// the exclusive 1-of-1 alike.
 contract BeatEscrow is ERC1155Holder, Ownable {
     IVouch public vouch;
+    ICollabRegistry public collabRegistry;
+    address public treasury;
+    uint16 public platformFeeBps; // 500 = 5%
+    uint16 public constant MAX_FEE_BPS = 1000; // never above 10%
     uint256 private _nextListingId = 1;
 
     struct Listing {
@@ -52,15 +72,49 @@ contract BeatEscrow is ERC1155Holder, Ownable {
     event Cancelled(uint256 indexed listingId);
     event Refunded(uint256 indexed listingId, address indexed buyer);
     event Reclaimed(uint256 indexed listingId);
+    event SettledSplit(
+        uint256 indexed listingId,
+        address indexed producer,
+        address indexed rapper,
+        uint256 producerWei,
+        uint256 rapperWei
+    );
 
-    constructor(address vouch_) Ownable(msg.sender) {
+    constructor(
+        address vouch_,
+        address collab_,
+        address treasury_,
+        uint16 platformFeeBps_
+    ) Ownable(msg.sender) {
         require(vouch_ != address(0), "BeatEscrow: zero vouch");
+        require(treasury_ != address(0), "BeatEscrow: zero treasury");
+        require(platformFeeBps_ <= MAX_FEE_BPS, "BeatEscrow: fee too high");
         vouch = IVouch(vouch_);
+        collabRegistry = ICollabRegistry(collab_);
+        treasury = treasury_;
+        platformFeeBps = platformFeeBps_;
     }
 
     function setVouch(address vouch_) external onlyOwner {
         require(vouch_ != address(0), "BeatEscrow: zero vouch");
         vouch = IVouch(vouch_);
+    }
+
+    /// @notice Point escrow at the collab registry (or address(0) to disable splits).
+    function setCollabRegistry(address collab_) external onlyOwner {
+        collabRegistry = ICollabRegistry(collab_);
+    }
+
+    /// @notice Move the platform fee destination (multisig, before real money flows).
+    function setTreasury(address treasury_) external onlyOwner {
+        require(treasury_ != address(0), "BeatEscrow: zero treasury");
+        treasury = treasury_;
+    }
+
+    /// @notice Adjust the platform fee, capped at 10%.
+    function setPlatformFeeBps(uint16 platformFeeBps_) external onlyOwner {
+        require(platformFeeBps_ <= MAX_FEE_BPS, "BeatEscrow: fee too high");
+        platformFeeBps = platformFeeBps_;
     }
 
     /// @notice Producer lists `amount` licenses: they move into escrow now.
@@ -107,8 +161,11 @@ contract BeatEscrow is ERC1155Holder, Ownable {
         emit Funded(listingId, msg.sender, msg.value);
     }
 
-    /// @notice Atomically swap: NFT -> buyer, ETH -> seller. Callable by anyone
+    /// @notice Atomically swap: NFT -> buyer, ETH -> payees. Callable by anyone
     /// once funded; re-checks the buyer's vouch so a revoked buyer can't settle.
+    /// The platform fee comes off the top to the treasury; when the lot is an
+    /// approved collab take, the remainder splits producer/rapper per the
+    /// registered terms, otherwise it all goes to the seller.
     function settle(uint256 listingId) external {
         Listing storage l = listings[listingId];
         require(l.active, "BeatEscrow: inactive");
@@ -116,9 +173,43 @@ contract BeatEscrow is ERC1155Holder, Ownable {
         require(vouch.isVerified(l.buyer), "BeatEscrow: buyer verification lapsed");
         l.active = false;
         IERC1155(l.nft).safeTransferFrom(address(this), l.buyer, l.tokenId, l.amount, "");
-        (bool ok, ) = l.seller.call{value: l.priceWei}("");
-        require(ok, "BeatEscrow: payout failed");
+
+        uint256 fee = (l.priceWei * platformFeeBps) / 10000;
+        uint256 remainder = l.priceWei - fee;
+        if (fee > 0) {
+            (bool feeOk, ) = treasury.call{value: fee}("");
+            require(feeOk, "BeatEscrow: fee payout failed");
+        }
+
+        (address producer, uint16 producerBps, bool isCollab) = _collabTerms(l.fingerprint);
+        if (isCollab) {
+            (, , address rapper, , ) = collabRegistry.getCollab(l.fingerprint);
+            uint256 producerCut = (remainder * producerBps) / 10000;
+            uint256 rapperCut = remainder - producerCut;
+            (bool pOk, ) = producer.call{value: producerCut}("");
+            require(pOk, "BeatEscrow: producer payout failed");
+            (bool rOk, ) = rapper.call{value: rapperCut}("");
+            require(rOk, "BeatEscrow: rapper payout failed");
+            emit SettledSplit(listingId, producer, rapper, producerCut, rapperCut);
+        } else {
+            (bool ok, ) = l.seller.call{value: remainder}("");
+            require(ok, "BeatEscrow: payout failed");
+        }
         emit Settled(listingId, l.buyer, l.seller, l.priceWei);
+    }
+
+    /// @notice Look up approved collab terms for a lot fingerprint. Returns
+    /// (producer, producerBps, isCollab).
+    function _collabTerms(bytes32 fingerprint)
+        internal
+        view
+        returns (address, uint16, bool)
+    {
+        if (address(collabRegistry) == address(0)) return (address(0), 0, false);
+        (, address producer, , uint16 producerBps, bool approved) =
+            collabRegistry.getCollab(fingerprint);
+        if (!approved || producer == address(0)) return (address(0), 0, false);
+        return (producer, producerBps, true);
     }
 
     /// @notice Seller pulls an unfunded listing: licenses come home.

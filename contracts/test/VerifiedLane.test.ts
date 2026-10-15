@@ -5,6 +5,7 @@ import type {
   BeatNFT,
   BeatRegistry,
   BeatShard,
+  CollabRegistry,
   ShardFactory,
   VouchSBT,
 } from "../typechain-types";
@@ -29,9 +30,17 @@ describe("Verified lane: VouchSBT + BeatEscrow + BeatShard", function () {
     const vouchFactory = await ethers.getContractFactory("VouchSBT");
     const vouch = (await vouchFactory.deploy()) as unknown as VouchSBT;
 
+    const collabFactory = await ethers.getContractFactory("CollabRegistry");
+    const collab = (await collabFactory.deploy(
+      await registry.getAddress()
+    )) as unknown as CollabRegistry;
+
     const escrowFactory = await ethers.getContractFactory("BeatEscrow");
     const escrow = (await escrowFactory.deploy(
-      await vouch.getAddress()
+      await vouch.getAddress(),
+      await collab.getAddress(),
+      studio.address,
+      500
     )) as unknown as BeatEscrow;
 
     const shardFactoryFactory = await ethers.getContractFactory("ShardFactory");
@@ -43,7 +52,7 @@ describe("Verified lane: VouchSBT + BeatEscrow + BeatShard", function () {
       .connect(producer)
       .registerBeat(fingerprint, metadataURI, producer.address);
 
-    return { registry, nft, vouch, escrow, shardFactory, studio, producer, buyer, stranger };
+    return { registry, nft, vouch, escrow, collab, shardFactory, studio, producer, buyer, stranger };
   }
 
   const week = 7 * 24 * 3600;
@@ -309,6 +318,150 @@ describe("Verified lane: VouchSBT + BeatEscrow + BeatShard", function () {
       )) as unknown as BeatShard;
       expect(await vault2.tokenId()).to.equal(tokenId);
       expect(await vault2.fingerprint()).to.equal(fingerprint);
+    });
+  });
+
+  describe("CollabRegistry + escrow splits", function () {
+    const takeFingerprint = ethers.keccak256(ethers.toUtf8Bytes("take-1"));
+    const takeMetadataURI = "https://api.vbeats.app/v1/takes/take-1";
+
+    async function collabSetup(open: boolean) {
+      const d = await deploy();
+      const { registry, collab, producer } = d;
+      const rapper = d.stranger;
+      // The rapper's vocal take is its own registered fingerprint.
+      await registry
+        .connect(rapper)
+        .registerBeat(takeFingerprint, takeMetadataURI, rapper.address);
+      if (open) {
+        await collab.connect(producer).setOpenCollabs(fingerprint, true);
+      }
+      return { ...d, rapper };
+    }
+
+    async function listedTake(open: boolean, shareBps: number) {
+      const d = await collabSetup(open);
+      const { nft, escrow, collab, rapper } = d;
+      await collab.connect(rapper).proposeCollab(fingerprint, takeFingerprint, shareBps);
+      const tokenId = await nft.leaseTokenId(takeFingerprint);
+      await nft.connect(rapper).mintLease(takeFingerprint, rapper.address, 10);
+      await nft
+        .connect(rapper)
+        .setApprovalForAll(await escrow.getAddress(), true);
+      const listingId = await escrow
+        .connect(rapper)
+        .list.staticCall(
+          await nft.getAddress(),
+          tokenId,
+          10,
+          price,
+          takeFingerprint,
+          week
+        );
+      await escrow
+        .connect(rapper)
+        .list(await nft.getAddress(), tokenId, 10, price, takeFingerprint, week);
+      return { ...d, tokenId, listingId };
+    }
+
+    it("keeps the take private until the producer approves", async function () {
+      const { collab, rapper, producer } = await collabSetup(false);
+      await collab.connect(rapper).proposeCollab(fingerprint, takeFingerprint, 0);
+      let terms = await collab.getCollab(takeFingerprint);
+      expect(terms.approved).to.equal(false);
+      expect(terms.producerShareBps).to.equal(5000); // 50/50 default
+      await expect(
+        collab.connect(rapper).approveCollab(takeFingerprint)
+      ).to.be.revertedWith("CollabRegistry: not the producer");
+      await expect(collab.connect(producer).approveCollab(takeFingerprint))
+        .to.emit(collab, "CollabApproved")
+        .withArgs(takeFingerprint, producer.address);
+      terms = await collab.getCollab(takeFingerprint);
+      expect(terms.approved).to.equal(true);
+    });
+
+    it("goes live instantly on open-collab beats", async function () {
+      const { collab, rapper } = await collabSetup(true);
+      await expect(
+        collab.connect(rapper).proposeCollab(fingerprint, takeFingerprint, 6000)
+      )
+        .to.emit(collab, "CollabProposed")
+        .withArgs(takeFingerprint, fingerprint, rapper.address, 6000, true);
+      const terms = await collab.getCollab(takeFingerprint);
+      expect(terms.approved).to.equal(true);
+      expect(terms.producerShareBps).to.equal(6000);
+    });
+
+    it("renegotiates splits only with both sides", async function () {
+      const { collab, rapper, producer } = await collabSetup(false);
+      await collab.connect(rapper).proposeCollab(fingerprint, takeFingerprint, 0);
+      await collab.connect(producer).approveCollab(takeFingerprint);
+      // Rapper asks for 40/60.
+      await collab.connect(rapper).requestSplit(takeFingerprint, 4000);
+      let terms = await collab.getCollab(takeFingerprint);
+      expect(terms.producerShareBps).to.equal(5000); // not live yet
+      // Proposer can't accept their own request.
+      await expect(
+        collab.connect(rapper).acceptSplit(takeFingerprint)
+      ).to.be.revertedWith("CollabRegistry: proposer cannot accept");
+      await expect(collab.connect(producer).acceptSplit(takeFingerprint))
+        .to.emit(collab, "SplitUpdated")
+        .withArgs(takeFingerprint, 4000);
+      terms = await collab.getCollab(takeFingerprint);
+      expect(terms.producerShareBps).to.equal(4000);
+    });
+
+    it("settles a collab sale: 5% platform fee, then the registered split", async function () {
+      const {
+        escrow,
+        nft,
+        vouch,
+        studio,
+        producer,
+        rapper,
+        buyer,
+        collab,
+        tokenId,
+        listingId,
+      } = await listedTake(false, 0);
+      await collab.connect(producer).approveCollab(takeFingerprint);
+      await vouch.connect(studio).issue(buyer.address);
+      await escrow.connect(buyer).fund(listingId, { value: price });
+      const producerBefore = await ethers.provider.getBalance(producer.address);
+      const rapperBefore = await ethers.provider.getBalance(rapper.address);
+      const treasuryBefore = await ethers.provider.getBalance(studio.address);
+      await escrow.settle(listingId);
+      expect(await nft.balanceOf(buyer.address, tokenId)).to.equal(10);
+      const fee = (price * 500n) / 10000n;
+      const remainder = price - fee;
+      const producerCut = (remainder * 5000n) / 10000n;
+      const rapperCut = remainder - producerCut;
+      const tolerance = ethers.parseEther("0.001");
+      expect(await ethers.provider.getBalance(studio.address)).to.be.greaterThanOrEqual(
+        treasuryBefore + fee - tolerance
+      );
+      expect(await ethers.provider.getBalance(producer.address)).to.be.greaterThanOrEqual(
+        producerBefore + producerCut - tolerance
+      );
+      expect(await ethers.provider.getBalance(rapper.address)).to.be.greaterThanOrEqual(
+        rapperBefore + rapperCut - tolerance
+      );
+    });
+
+    it("pays the seller in full (minus fee) when there is no approved collab", async function () {
+      const { escrow, vouch, studio, rapper, buyer, listingId } = await listedTake(
+        false,
+        0
+      );
+      // No approval: the take is not a live collab.
+      await vouch.connect(studio).issue(buyer.address);
+      await escrow.connect(buyer).fund(listingId, { value: price });
+      const rapperBefore = await ethers.provider.getBalance(rapper.address);
+      await escrow.settle(listingId);
+      const fee = (price * 500n) / 10000n;
+      expect(await ethers.provider.getBalance(rapper.address)).to.be.greaterThanOrEqual(
+        rapperBefore + (price - fee) - ethers.parseEther("0.001")
+      );
     });
   });
 });

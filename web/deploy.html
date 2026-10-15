@@ -31,7 +31,7 @@
 
   <div class="card" style="margin-top:16px">
     <h3 style="margin-bottom:10px">3 · Deploy</h3>
-    <p class="note">Seven contracts, in dependency order. You'll confirm each one in your wallet (~$5–15 total on Base).</p>
+    <p class="note">Nine contracts, in dependency order. You'll confirm each one in your wallet (~$5–15 total on Base).</p>
     <div style="margin-top:10px"><button class="btn" id="deploy" disabled>Deploy all contracts</button></div>
     <div id="progress" style="margin-top:12px"></div>
   </div>
@@ -83,7 +83,7 @@ document.getElementById('connect').onclick = async () => {
   } catch (e) { setErr(e.message || e); }
 };
 
-const ORDER = ['BeatRegistry', 'BeatNFT', 'VouchSBT', 'BeatEscrow', 'ShardFactory', 'BeatStaking', 'BeatOffers'];
+const ORDER = ['BeatRegistry', 'BeatNFT', 'VouchSBT', 'CollabRegistry', 'BeatEscrow', 'ShardFactory', 'BeatStaking', 'BeatOffers', 'VoltPass'];
 
 document.getElementById('deploy').onclick = async () => {
   const btn = document.getElementById('deploy');
@@ -101,7 +101,8 @@ document.getElementById('deploy').onclick = async () => {
       const factory = new ethers.ContractFactory(abi, bytecode, signer);
       let args = [];
       if (name === 'BeatNFT') args = [addrs.BeatRegistry];
-      if (name === 'BeatEscrow') args = [addrs.VouchSBT];
+      if (name === 'CollabRegistry') args = [addrs.BeatRegistry];
+      if (name === 'BeatEscrow') args = [addrs.VouchSBT, addrs.CollabRegistry, platform, 500];
       if (name === 'BeatStaking') args = [addrs.BeatRegistry, addrs.VouchSBT, platform];
       if (name === 'BeatOffers') args = [addrs.BeatRegistry, addrs.VouchSBT];
       log('<p class="note">Deploying <b>' + name + '</b> — confirm in your wallet…</p>');
@@ -117,10 +118,12 @@ document.getElementById('deploy').onclick = async () => {
       'BEAT_REGISTRY_ADDRESS=' + addrs.BeatRegistry,
       'BEAT_NFT_ADDRESS=' + addrs.BeatNFT,
       'VOUCH_ADDRESS=' + addrs.VouchSBT,
+      'COLLAB_REGISTRY_ADDRESS=' + addrs.CollabRegistry,
       'BEAT_ESCROW_ADDRESS=' + addrs.BeatEscrow,
       'SHARD_FACTORY_ADDRESS=' + addrs.ShardFactory,
       'BEAT_STAKING_ADDRESS=' + addrs.BeatStaking,
       'BEAT_OFFERS_ADDRESS=' + addrs.BeatOffers,
+      'VOLT_PASS_ADDRESS=' + addrs.VoltPass,
       'PLATFORM_ADDRESS=' + platform,
     ].join('\n');
     const siteCfg = [
@@ -133,7 +136,7 @@ document.getElementById('deploy').onclick = async () => {
     document.getElementById('result').innerHTML =
       '<p class="note">Send this block to Muse — it wires up Render and the site:</p>' +
       '<pre class="mono" style="white-space:pre-wrap;font-size:12px">' + env + '\n\n' + siteCfg + '</pre>';
-    log('<p class="note"><b>All seven contracts are live on Base.</b> Copy the block above to Muse.</p>');
+    log('<p class="note"><b>All nine contracts are live on Base.</b> Copy the block above to Muse.</p>');
   } catch (e) {
     setErr('Deployment stopped: ' + (e.message || e) + '. Already-deployed contracts above are fine — re-run to continue.');
     btn.disabled = false;

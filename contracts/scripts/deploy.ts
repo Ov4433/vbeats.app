@@ -19,8 +19,19 @@ async function main() {
   const vouchAddress = await vouch.getAddress();
   console.log(`VouchSBT deployed to:         ${vouchAddress}`);
 
+  const CollabRegistry = await ethers.getContractFactory("CollabRegistry");
+  const collab = await CollabRegistry.deploy(registryAddress);
+  await collab.waitForDeployment();
+  const collabAddress = await collab.getAddress();
+  console.log(`CollabRegistry deployed to:   ${collabAddress}`);
+
+  const [deployer] = await ethers.getSigners();
+  const platformAddress = process.env.PLATFORM_ADDRESS || (await deployer.getAddress());
+  if (!process.env.PLATFORM_ADDRESS) {
+    console.log(`(no PLATFORM_ADDRESS set — using deployer as the platform treasury; set it properly for mainnet)`);
+  }
   const BeatEscrow = await ethers.getContractFactory("BeatEscrow");
-  const escrow = await BeatEscrow.deploy(vouchAddress);
+  const escrow = await BeatEscrow.deploy(vouchAddress, collabAddress, platformAddress, 500);
   await escrow.waitForDeployment();
   const escrowAddress = await escrow.getAddress();
   console.log(`BeatEscrow deployed to:       ${escrowAddress}`);
@@ -31,11 +42,6 @@ async function main() {
   const shardFactoryAddress = await shardFactory.getAddress();
   console.log(`ShardFactory deployed to:    ${shardFactoryAddress}`);
 
-  const [deployer] = await ethers.getSigners();
-  const platformAddress = process.env.PLATFORM_ADDRESS || (await deployer.getAddress());
-  if (!process.env.PLATFORM_ADDRESS) {
-    console.log(`(no PLATFORM_ADDRESS set — using deployer as the 25% platform treasury; set it properly for mainnet)`);
-  }
   const BeatStaking = await ethers.getContractFactory("BeatStaking");
   const staking = await BeatStaking.deploy(registryAddress, vouchAddress, platformAddress);
   await staking.waitForDeployment();
@@ -48,16 +54,24 @@ async function main() {
   const offersAddress = await offers.getAddress();
   console.log(`BeatOffers deployed to:      ${offersAddress}`);
 
+  const VoltPass = await ethers.getContractFactory("VoltPass");
+  const voltPass = await VoltPass.deploy();
+  await voltPass.waitForDeployment();
+  const voltPassAddress = await voltPass.getAddress();
+  console.log(`VoltPass deployed to:        ${voltPassAddress}`);
+
   console.log(`
 Set these in the Render vbeats-api service env (and backend/.env):
   RPC_URL=https://mainnet.base.org
   BEAT_REGISTRY_ADDRESS=${registryAddress}
   BEAT_NFT_ADDRESS=${nftAddress}
   VOUCH_ADDRESS=${vouchAddress}
+  COLLAB_REGISTRY_ADDRESS=${collabAddress}
   BEAT_ESCROW_ADDRESS=${escrowAddress}
   SHARD_FACTORY_ADDRESS=${shardFactoryAddress}
   BEAT_STAKING_ADDRESS=${stakingAddress}
   BEAT_OFFERS_ADDRESS=${offersAddress}
+  VOLT_PASS_ADDRESS=${voltPassAddress}
   PLATFORM_ADDRESS=${platformAddress}
 `);
 }
