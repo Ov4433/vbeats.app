@@ -56,7 +56,8 @@ function setErr(m) {
   document.getElementById('err').innerHTML = m ? '<div class="err">' + m + '</div>' : '';
 }
 
-document.getElementById('connect').onclick = async () => {
+document.getElementById('connect').onclick = connectWallet;
+async function connectWallet() {
   try {
     setErr('');
     if (!window.ethereum) throw new Error('No wallet found — install MetaMask and open this page in that browser.');
@@ -144,6 +145,6 @@ document.getElementById('deploy').onclick = async () => {
 };
 </script>
 <script src="js/api.js"></script>
-<script>nav('');</script>
+<script>nav(''); var wb = document.getElementById('wallet-btn'); if (wb) wb.onclick = connectWallet;</script>
 </body>
 </html>
