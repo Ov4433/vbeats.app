@@ -32,7 +32,7 @@ services:
       - key: JWT_REFRESH_TTL_DAYS
         value: 30
       - key: CORS_ORIGINS
-        value: https://vbeats-api.onrender.com # adjust if you rename the service
+        value: https://ov4433.github.io # frontend origin (GitHub Pages)
       - key: MAX_UPLOAD_MB
         value: 50
       - key: STRIPE_SECRET_KEY

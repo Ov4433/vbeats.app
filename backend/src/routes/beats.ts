@@ -20,19 +20,23 @@ import { beatCreateSchema, beatUpdateSchema } from '../schemas';
 
 const router = Router();
 
-// Public: beat detail doubles as the NFT token URI (marketplaces fetch it
-// without credentials), play tracking counts anonymous listeners, and the
-// offers feed is public negotiation state.
+// Public: play tracking counts anonymous listeners, and the offers feed is
+// public negotiation state.
 router.post('/:id/play', optionalAuth, recordPlay);
-router.get('/:id', getBeat);
 router.get('/:id/offers', beatOffersInfo);
+
+// Static paths first — Express matches in order, so these must come before
+// '/:id', otherwise "marketplace"/"search" would be treated as a beat id.
+router.get('/search', requireAuth, search);
+router.get('/marketplace', requireAuth, marketplace);
+router.get('/user', requireAuth, getUserBeats);
+
+// Public: beat detail doubles as the NFT token URI (marketplaces fetch it
+// without credentials).
+router.get('/:id', getBeat);
 
 router.use(requireAuth);
 
-// Static paths first — Express matches in order.
-router.get('/search', search);
-router.get('/marketplace', marketplace);
-router.get('/user', getUserBeats);
 router.post('/upload', uploadBeat);
 router.get('/', listBeats);
 router.post('/', validateBody(beatCreateSchema), createBeat);
