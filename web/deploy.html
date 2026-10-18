@@ -43,6 +43,8 @@
 </main>
 <footer class="footer"><div class="footer-bat"><img src="assets/mascot-profile.webp" alt=""></div>Verified Beats Studio — Volt keeps the receipts.</footer>
 <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.min.js"></script>
+<script>if (typeof ethers === 'undefined') document.write('<script src="https://unpkg.com/ethers@6.13.4/dist/ethers.min.js"><\/script>');</script>
+<script>if (typeof ethers === 'undefined') document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.4/ethers.umd.min.js"><\/script>');</script>
 <script src="js/deploy-data.js"></script>
 <script>
 const EXPECTED = '0xEed0867dA5d387DAE2c548A4620c43cb26a9D517';
@@ -57,11 +59,32 @@ function setErr(m) {
 }
 
 document.getElementById('connect').onclick = connectWallet;
+let connecting = false;
+
+function withTimeout(promise, ms, label) {
+  let timer = null;
+  const timeout = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(label)), ms); });
+  return Promise.race([promise, timeout]).finally(() => { if (timer) clearTimeout(timer); });
+}
+
 async function connectWallet() {
+  if (connecting) return;
+  connecting = true;
+  const btn = document.getElementById('connect');
+  const origLabel = btn.textContent;
   try {
     setErr('');
+    if (typeof ethers === 'undefined') throw new Error('Wallet library failed to load — your network is blocking the script. Refresh the page or try another connection, then tap Connect wallet again.');
     if (!window.ethereum) throw new Error('No wallet found — install MetaMask and open this page in that browser.');
-    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+    const line = document.getElementById('wallet-line');
+    line.textContent = 'Waiting for your wallet — unlock MetaMask, then approve the connection request.';
+    btn.disabled = true; btn.textContent = 'Waiting for wallet…';
+    await withTimeout(
+      window.ethereum.request({ method: 'eth_requestAccounts' }),
+      45000,
+      'No response from the wallet after 45 seconds. If MetaMask jumped to your dashboard: unlock it, come back to this page, and tap Connect wallet again.'
+    );
+    btn.disabled = false; btn.textContent = origLabel;
     const provider = new ethers.BrowserProvider(window.ethereum);
     const net = await provider.getNetwork();
     if (Number(net.chainId) !== 8453) {
@@ -69,7 +92,6 @@ async function connectWallet() {
     }
     signer = await provider.getSigner();
     walletAddr = await signer.getAddress();
-    const line = document.getElementById('wallet-line');
     if (walletAddr.toLowerCase() !== EXPECTED.toLowerCase()) {
       line.innerHTML = 'Connected: <span class="mono">' + walletAddr + '</span><br><b>Warning:</b> this is not the studio wallet. Contracts will be owned by the connected wallet.';
     } else {
@@ -82,7 +104,16 @@ async function connectWallet() {
     }
     document.getElementById('deploy').disabled = false;
   } catch (e) { setErr(e.message || e); }
+  finally { btn.disabled = false; btn.textContent = origLabel; connecting = false; }
 };
+
+// Late approvals: if you approve while MetaMask is on its dashboard and then
+// come back to this page, finish connecting without another tap.
+if (window.ethereum && typeof window.ethereum.on === 'function') {
+  window.ethereum.on('accountsChanged', (accounts) => {
+    if (accounts && accounts.length && !walletAddr && !connecting) connectWallet();
+  });
+}
 
 const ORDER = ['BeatRegistry', 'BeatNFT', 'VouchSBT', 'CollabRegistry', 'BeatEscrow', 'ShardFactory', 'BeatStaking', 'BeatOffers', 'VoltPass'];
 
