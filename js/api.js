@@ -4,9 +4,9 @@ window.VBEATS_API = window.VBEATS_API || 'https://vbeats-api.onrender.com';
 // --- Chain config (Base mainnet). Contract addresses are empty until deploy. ---
 window.VBEATS_CHAIN_ID = window.VBEATS_CHAIN_ID || 8453;
 window.VBEATS_RPC_URL = window.VBEATS_RPC_URL || 'https://mainnet.base.org';
-window.VBEATS_REGISTRY_ADDRESS = window.VBEATS_REGISTRY_ADDRESS || '';
-window.VBEATS_NFT_ADDRESS = window.VBEATS_NFT_ADDRESS || '';
-window.VBEATS_OFFERS_ADDRESS = window.VBEATS_OFFERS_ADDRESS || '';
+window.VBEATS_REGISTRY_ADDRESS = window.VBEATS_REGISTRY_ADDRESS || '0x4eFeB94F1FA8fa5D3d30A945D728d85d5FFeC1A7';
+window.VBEATS_NFT_ADDRESS = window.VBEATS_NFT_ADDRESS || '0x863A85ee5E542AB126a8a28191f438D4B6E508E0';
+window.VBEATS_OFFERS_ADDRESS = window.VBEATS_OFFERS_ADDRESS || '0x64e75daee8eaF13143082A8A04BCA9CF9b3DD848';
 
 // Minimal BeatOffers ABI for the actions the site performs.
 const BEAT_OFFERS_ABI = [
