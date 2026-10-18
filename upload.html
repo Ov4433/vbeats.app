@@ -35,7 +35,7 @@
       <div class="field"><label>BPM</label><input id="bpm" type="number" min="1" max="999" placeholder="140"></div>
     </div>
     <div class="row2">
-      <div class="field"><label>Price (USD)</label><input id="price" type="number" min="0" step="0.01" value="19.99"></div>
+      <div class="field"><label>Price (ETH)</label><input id="price" type="number" min="0" step="0.001" value="0.005"></div>
       <div class="field"><label>Key (optional)</label><input id="key" placeholder="Am" maxlength="16"></div>
     </div>
     <div class="field"><label>Description</label><textarea id="desc" rows="3" placeholder="Dark trap beat, heavy 808s…"></textarea></div>
@@ -98,6 +98,9 @@ $('up-go').onclick = async () => {
     fd.append('audio', file);
     fd.append('title', title); fd.append('genre', genre);
     fd.append('price', String(price));
+    // Send the connected wallet so the relayer records it as the on-chain
+    // owner in BeatRegistry. Without it, on-chain registration is skipped.
+    if (api.wallet) fd.append('producerAddress', api.wallet);
     if ($('bpm').value) fd.append('bpm', $('bpm').value);
     if ($('key').value.trim()) fd.append('key', $('key').value.trim());
     if ($('desc').value.trim()) fd.append('description', $('desc').value.trim());
