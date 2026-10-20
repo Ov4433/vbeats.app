@@ -10,6 +10,8 @@ function ensureEthers() {
   if (typeof ethers !== 'undefined') return Promise.resolve();
   if (_ethersLoading) return _ethersLoading;
   const CDNS = [
+    // Self-hosted first: our own origin is never blocked by CDN filters.
+    'js/ethers.min.js',
     'https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.min.js',
     'https://unpkg.com/ethers@6.13.4/dist/ethers.min.js',
     'https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.4/ethers.umd.min.js',
