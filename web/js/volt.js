@@ -127,8 +127,11 @@
     card.style.width = cw + 'px';
     const ch = card.offsetHeight;
     let left = Math.max(16, Math.min(r.left + scrollX, innerWidth - cw - 16));
-    let top = r.bottom + scrollY + 16;
-    if (top + ch > scrollY + innerHeight - 16) top = r.top + scrollY - ch - 16;
+    // Sit higher: tighter gap under the target, flip above it sooner, and
+    // never land in the bottom tab bar's zone.
+    const bottomInset = document.body.classList.contains('has-tabbar') ? 108 : 16;
+    let top = r.bottom + scrollY + 8;
+    if (top + ch > scrollY + innerHeight - bottomInset) top = r.top + scrollY - ch - 10;
     if (top < scrollY + 16) top = scrollY + 16;
     card.style.left = left + 'px';
     card.style.top = top + 'px';
