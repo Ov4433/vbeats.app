@@ -168,7 +168,7 @@ async function renderClaim() {
 async function connect() {
   try {
     setMsg('');
-    if (typeof ethers === 'undefined') throw new Error('Wallet library failed to load — check your connection and refresh.');
+    await ensureEthers();
     if (!window.ethereum) throw new Error('No wallet found — set one up with the Coinbase link above, then come back.');
     const provider = new ethers.BrowserProvider(window.ethereum);
     await provider.send('eth_requestAccounts', []);
