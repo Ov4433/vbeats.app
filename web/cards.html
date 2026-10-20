@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Beat Cards — Verified Beats Studio</title>
+<link rel="icon" href="assets/logo.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<nav class="nav" id="nav"></nav>
+
+<main class="wrap">
+  <div style="padding:26px 0 6px">
+    <h1 style="font-size:30px;margin-bottom:6px">Beat Cards</h1>
+    <p class="note">Every card is a beat with its receipt on Base — tap one for its card back, lease, and offers.</p>
+  </div>
+  <div class="cards-grid" id="cards" style="padding:18px 0 50px">
+    <p class="note">Loading cards…</p>
+  </div>
+</main>
+
+<footer class="footer"><div class="footer-bat"><img src="assets/mascot-profile.webp" alt=""></div>Verified Beats Studio — Volt keeps the receipts.</footer>
+
+<script src="js/api.js"></script>
+<script src="js/volt.js"></script>
+<script>
+nav('cards.html');
+api.marketplace({ limit: 24 }).then(d => {
+  const beats = d.beats || [];
+  document.getElementById('cards').innerHTML = beats.length
+    ? beats.map(card).join('')
+    : `<div style="grid-column:1/-1;text-align:center;padding:24px">
+        <img src="assets/mascot-profile.webp" alt="" style="width:110px;border-radius:50%;margin-bottom:10px">
+        <p class="note">No cards yet — the first beat dropped becomes card #1.</p></div>`;
+}).catch(() => {
+  document.getElementById('cards').innerHTML = '<p class="note">Marketplace is waking up (free tier cold start) — refresh in a few seconds.</p>';
+});
+
+function card(b) {
+  return `<div class="nft-card" onclick="location.href='beat.html?id=${esc(b.id)}'">
+    <img src="${esc(api.artUrl(b))}" alt="" loading="lazy">
+    <div class="nc-body">
+      <div class="nc-title">${esc(b.title)}</div>
+      <div class="nc-meta">${esc(b.genre)}${b.bpm ? ' · ' + esc(b.bpm) + ' BPM' : ''}${b.duration || b.dur ? ' · ' + fmtDur(b.duration || b.dur) : ''}</div>
+      <div class="nc-row"><span class="nc-price">$${esc(b.price)}</span><span class="chip">✓ VERIFIED</span></div>
+    </div></div>`;
+}
+</script>
+</body>
+</html>

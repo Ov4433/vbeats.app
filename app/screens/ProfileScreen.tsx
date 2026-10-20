@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 
-export default function ProfileScreen() {
+export default function ProfileScreen({ navigation }: any) {
   return (
     <View style={styles.container}>
       <View style={styles.profileHeader}>
@@ -25,6 +25,13 @@ export default function ProfileScreen() {
         </View>
       </View>
       
+      <TouchableOpacity
+        style={[styles.button, { marginBottom: 12 }]}
+        onPress={() => navigation.navigate('Beats')}
+      >
+        <Text style={styles.buttonText}>My Beats</Text>
+      </TouchableOpacity>
+
       <TouchableOpacity style={styles.button}>
         <Text style={styles.buttonText}>Edit Profile</Text>
       </TouchableOpacity>

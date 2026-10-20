@@ -214,7 +214,7 @@ const api = {
 
 function nav(active) {
   const links = [
-    ['index.html', 'Home'], ['marketplace.html', 'Marketplace'],
+    ['index.html', 'Home'], ['marketplace.html', 'Explore'],
     ['studio.html', 'Studio'], ['chat.html', 'Chat'], ['upload.html', 'Upload'],
     ['claim.html', 'Volt Pass'],
   ];
@@ -226,6 +226,41 @@ function nav(active) {
     links.map(([h, t]) => `<a href="${h}" class="${h === active ? 'on' : ''}">${t}</a>`).join('') +
     '</div><div class="nav-right" id="nav-user"></div></div>';
   renderUser();
+  tabbar(active);
+}
+
+// App-format bottom tab bar (Rapchat-style): Home / Explore / big red
+// Record / Cards / Profile. Injected on every page that builds the nav,
+// except the deploy console.
+function tabbar(active) {
+  if (/deploy\.html$/.test(location.pathname)) return;
+  if (document.querySelector('.tabbar')) return;
+  const on = {
+    'index.html': 'index.html',
+    'marketplace.html': 'marketplace.html',
+    'studio.html': 'studio.html',
+    'cards.html': 'cards.html',
+    'beat.html': 'cards.html',
+    'profile.html': 'profile.html',
+  }[active] || '';
+  const ico = {
+    home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9.5 21v-6h5v6"/></svg>',
+    explore: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.2"/><polygon points="15.5 8.5 13.8 13.8 8.5 15.5 10.2 10.2" fill="currentColor" stroke="none"/></svg>',
+    cards: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="13" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/></svg>',
+    profile: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4.5 20.5c1.4-3.4 4.2-5 7.5-5s6.1 1.6 7.5 5"/></svg>',
+  };
+  const tab = (href, label, svg) =>
+    `<a href="${href}" class="${on === href ? 'on' : ''}">${svg}<span>${label}</span></a>`;
+  const bar = document.createElement('div');
+  bar.className = 'tabbar';
+  bar.innerHTML =
+    tab('index.html', 'Home', ico.home) +
+    tab('marketplace.html', 'Explore', ico.explore) +
+    `<a href="studio.html" class="tab-rec ${on === 'studio.html' ? 'on' : ''}"><span class="rec-btn"><i></i></span><small>Record</small></a>` +
+    tab('cards.html', 'Cards', ico.cards) +
+    tab('profile.html', 'Profile', ico.profile);
+  document.body.appendChild(bar);
+  document.body.classList.add('has-tabbar');
 }
 
 function renderUser() {
