@@ -36,6 +36,15 @@
     <div id="progress" style="margin-top:12px"></div>
   </div>
 
+  <div class="card" style="margin-top:16px">
+    <h3 style="margin-bottom:10px">4 · VoltPass v2 upgrade (token-gated claims)</h3>
+    <p class="note">Deploys ONLY the new VoltPass. v2 lets the site relayer mint claim passes (hold 10 VBEATS → claim on the site, gasless); the public paid mint ships closed. The relayer below is preset to the studio relayer wallet — the backend mints through it, so don't change it unless the relayer rotates.</p>
+    <div style="margin-top:10px"><input id="relayer" type="text" value="0xd5d4A60732375A910a83AEDfc56d7A60472309bC" style="width:100%"></div>
+    <div style="margin-top:10px"><button class="btn" id="deploy-pass" disabled>Deploy VoltPass v2 only</button></div>
+    <div id="pass-progress" style="margin-top:12px"></div>
+    <div id="pass-result" style="margin-top:12px"></div>
+  </div>
+
   <div class="card" style="margin-top:16px;display:none" id="result-card">
     <h3 style="margin-bottom:10px">✓ Deployed</h3>
     <div id="result"></div>
@@ -103,6 +112,7 @@ async function connectWallet() {
       line.innerHTML += ' <b>— low! Fund the wallet before deploying.</b>';
     }
     document.getElementById('deploy').disabled = false;
+    document.getElementById('deploy-pass').disabled = false;
   } catch (e) { setErr(e.message || e); }
   finally { btn.disabled = false; btn.textContent = origLabel; connecting = false; }
 };
@@ -137,6 +147,11 @@ document.getElementById('deploy').onclick = async () => {
       if (name === 'BeatEscrow') args = [addrs.VouchSBT, addrs.CollabRegistry, platform, 500];
       if (name === 'BeatStaking') args = [addrs.BeatRegistry, addrs.VouchSBT, platform];
       if (name === 'BeatOffers') args = [addrs.BeatRegistry, addrs.VouchSBT];
+      if (name === 'VoltPass') {
+        const relayer = document.getElementById('relayer').value.trim();
+        if (!ethers.isAddress(relayer)) throw new Error('Relayer address is not valid.');
+        args = [relayer];
+      }
       log('<p class="note">Deploying <b>' + name + '</b> — confirm in your wallet…</p>');
       const c = await factory.deploy(...args);
       await c.waitForDeployment();
@@ -171,6 +186,31 @@ document.getElementById('deploy').onclick = async () => {
     log('<p class="note"><b>All nine contracts are live on Base.</b> Copy the block above to Muse.</p>');
   } catch (e) {
     setErr('Deployment stopped: ' + (e.message || e) + '. Already-deployed contracts above are fine — re-run to continue.');
+    btn.disabled = false;
+  }
+};
+
+document.getElementById('deploy-pass').onclick = async () => {
+  const btn = document.getElementById('deploy-pass');
+  const out = document.getElementById('pass-progress');
+  try {
+    setErr('');
+    if (!signer) throw new Error('Connect the studio wallet first (step 1).');
+    const relayer = document.getElementById('relayer').value.trim();
+    if (!ethers.isAddress(relayer)) throw new Error('Relayer address is not valid.');
+    btn.disabled = true;
+    out.innerHTML = '<p class="note">Deploying <b>VoltPass v2</b> — confirm in your wallet…</p>';
+    const { abi, bytecode } = window.VBEATS_DEPLOY.contracts['VoltPass'];
+    const factory = new ethers.ContractFactory(abi, bytecode, signer);
+    const c = await factory.deploy(relayer);
+    await c.waitForDeployment();
+    const addr = await c.getAddress();
+    out.innerHTML = '<p class="mono" style="color:var(--ok)">✓ VoltPass v2 → ' + addr + '</p>';
+    document.getElementById('pass-result').innerHTML =
+      '<p class="note">Send this line to Muse — it points the API at the new pass:</p>' +
+      '<pre class="mono" style="white-space:pre-wrap;font-size:12px">VOLT_PASS_ADDRESS=' + addr + '</pre>';
+  } catch (e) {
+    setErr('VoltPass v2 deploy stopped: ' + (e.message || e));
     btn.disabled = false;
   }
 };

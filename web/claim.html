@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Volt Pass — Verified Beats Studio</title>
+<link rel="icon" href="assets/logo.png">
+<link rel="stylesheet" href="css/style.css">
+<style>
+  .bat-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin-top:12px; }
+  .bat-pick { text-align:left; padding:14px; border-radius:14px; border:1px solid var(--line); background:rgba(255,255,255,.02); cursor:pointer; color:inherit; width:100%; }
+  .bat-pick.on { border-color:var(--gold, #e8b64c); box-shadow:0 0 0 1px var(--gold, #e8b64c) inset; }
+  .bat-dot { display:inline-flex; align-items:center; justify-content:center; width:38px; height:38px; border-radius:50%; font-weight:800; font-size:18px; color:#0b0b10; margin-bottom:8px; }
+  .step { display:flex; gap:12px; margin-top:14px; }
+  .step-n { flex:0 0 28px; height:28px; border-radius:50%; background:var(--gold, #e8b64c); color:#0b0b10; font-weight:800; display:flex; align-items:center; justify-content:center; }
+  .bar { height:10px; border-radius:6px; background:rgba(255,255,255,.08); overflow:hidden; margin-top:8px; }
+  .bar > div { height:100%; background:linear-gradient(90deg,#b04df0,#e8b64c); width:0%; transition:width .6s; }
+</style>
+</head>
+<body>
+<nav class="nav" id="nav"></nav>
+<main class="wrap" style="max-width:720px">
+  <div class="page-head"><div>
+    <h1>🎟️ The Volt Pass</h1>
+    <p>The Founding Producer Pass for Verified Beats Studio. Hold <b>10 VBEATS</b>, claim your pass, pick your bat — that's your home screen now.</p>
+  </div></div>
+
+  <div id="msg"></div>
+
+  <div class="card" style="margin-top:16px">
+    <h3 style="margin-bottom:6px">👥 Founding members</h3>
+    <p><span id="member-count" style="font-size:26px;font-weight:800">–</span> <span class="note">/ 100 founding members</span></p>
+    <div class="bar"><div id="member-bar"></div></div>
+    <p class="note" id="showcase-line" style="margin-top:8px">🎤 Showcase bookings unlock at 100 members.</p>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <h3 style="margin-bottom:6px">🛒 Don't hold VBEATS yet?</h3>
+    <div class="step"><div class="step-n">1</div><div>
+      <b>Set up your wallet</b>
+      <p class="note">Use the studio's Coinbase link — it carries the promo code:</p>
+      <p style="margin-top:6px"><a class="btn" href="https://coinbase.com/join/CSH9PJ8?src=android-link" target="_blank" rel="noopener">Open Coinbase →</a></p>
+    </div></div>
+    <div class="step"><div class="step-n">2</div><div>
+      <b>Move ETH to Robinhood Chain</b>
+      <p class="note">VBEATS trades on Robinhood Chain. Bridge a little ETH from Base with Relay — it lands in seconds. Only ever use this official link; fake bridge sites are a known scam.</p>
+      <p style="margin-top:6px"><a class="btn" href="https://relay.link" target="_blank" rel="noopener">Open Relay →</a></p>
+    </div></div>
+    <div class="step"><div class="step-n">3</div><div>
+      <b>Buy at least 10 VBEATS</b>
+      <p class="note">On Pons, at whatever the market price is.</p>
+      <p style="margin-top:6px"><a class="btn" href="https://ponsfamily.com" target="_blank" rel="noopener">Open Pons →</a></p>
+    </div></div>
+  </div>
+
+  <div class="card" style="margin-top:16px" id="claim-card">
+    <h3 style="margin-bottom:6px">🦇 Claim your pass</h3>
+    <div id="claim-body"><p class="note">Checking claim status…</p></div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <h3 style="margin-bottom:10px">What the pass gets you</h3>
+    <p>⚡ <b>Early upload access</b> — producers with the pass upload before the public launch.</p>
+    <p style="margin-top:8px">🎤 <b>A showcase date</b> — pick a future date to showcase your beats (unlocks at 100 members).</p>
+    <p style="margin-top:8px">🏅 <b>Founding Producer badge</b> — and your first export mints gasless, on us.</p>
+    <p class="note" style="margin-top:10px">The pass is soulbound — it can't be sold or transferred. It's yours because you hold the token. 1,000 passes, ever.</p>
+  </div>
+</main>
+<footer class="footer"><div class="footer-bat"><img src="assets/mascot-profile.webp" alt=""></div>Verified Beats Studio — Volt keeps the receipts.</footer>
+<script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.min.js"></script>
+<script>if (typeof ethers === 'undefined') document.write('<script src="https://unpkg.com/ethers@6.13.4/dist/ethers.min.js"><\/script>');</script>
+<script>if (typeof ethers === 'undefined') document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.4/ethers.umd.min.js"><\/script>');</script>
+<script src="js/api.js"></script>
+<script src="js/volt.js"></script>
+<script>
+nav('claim.html');
+
+const API = window.VBEATS_API;
+const BATS = [
+  { id: 'volt',  name: 'Volt',  role: 'Producer',        color: '#c77dff', desc: 'Beat maker first. The studio is home.' },
+  { id: 'forte', name: 'Forte', role: 'Artist',          color: '#ffd166', desc: 'Vocal booth first. Beats to rap on.' },
+  { id: 'bass',  name: 'Bass',  role: 'Onchain · Investor', color: '#6ec1ff', desc: 'Verified drops, charts, onchain first.' },
+  { id: 'gwei',  name: 'Gwei',  role: 'Trader',          color: '#7dff8a', desc: 'Marketplace first. Exclusives, staking, vaults.' },
+];
+let status = null, address = '', signer = null, selectedBat = localStorage.getItem('vbeats_bat') || '';
+
+function setMsg(html) { document.getElementById('msg').innerHTML = html || ''; }
+function errBox(m) { return '<div class="err">' + m + '</div>'; }
+function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+async function apiGet(path) { const r = await fetch(API + path); if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }
+
+async function loadStatus() {
+  try {
+    status = await apiGet('/v1/pass/status');
+    document.getElementById('member-count').textContent = status.members;
+    document.getElementById('member-bar').style.width = Math.min(100, status.members / status.memberGoal * 100) + '%';
+    document.getElementById('showcase-line').textContent = status.showcaseUnlocked
+      ? '🎤 Showcase bookings are LIVE — the founding 100 is complete.'
+      : '🎤 Showcase bookings unlock at ' + status.memberGoal + ' members — ' + (status.memberGoal - status.members) + ' to go.';
+  } catch { /* counter stays as dashes; claim card explains state */ }
+  renderClaim();
+}
+
+async function walletState() {
+  const [me, elig] = await Promise.all([
+    apiGet('/v1/pass/me/' + address).catch(() => null),
+    apiGet('/v1/pass/eligibility/' + address).catch(() => null),
+  ]);
+  return { me, elig };
+}
+
+function batPickerHtml() {
+  return '<p style="margin-top:12px"><b>Pick your bat</b> — it becomes your home screen:</p><div class="bat-grid">' +
+    BATS.map(b =>
+      '<button class="bat-pick' + (selectedBat === b.id ? ' on' : '') + '" data-bat="' + b.id + '">' +
+      '<span class="bat-dot" style="background:' + b.color + '">' + b.name[0] + '</span><br>' +
+      '<b>' + b.name + '</b> · ' + b.role + '<br><span class="note">' + b.desc + '</span></button>'
+    ).join('') + '</div>';
+}
+
+async function renderClaim() {
+  const body = document.getElementById('claim-body');
+  if (!status) { body.innerHTML = '<p class="note">Checking claim status…</p>'; return; }
+  if (!address) {
+    body.innerHTML = '<p class="note">Connect the wallet that holds your VBEATS. The pass mints to that same address on Base — no gas, no transaction on your side, just one signature to prove the wallet is yours.</p>' +
+      '<div style="margin-top:12px"><button class="btn" id="connect">Connect wallet</button></div>';
+    document.getElementById('connect').onclick = connect;
+    return;
+  }
+  body.innerHTML = '<p class="note">Connected: <span class="mono">' + address + '</span> — checking…</p>';
+  const { me, elig } = await walletState();
+  if (me && me.hasPass) {
+    const bat = BATS.find(b => b.id === me.bat);
+    body.innerHTML =
+      '<p style="font-size:20px"><b>🎟️ You\'re member #' + esc(me.memberNumber) + '</b></p>' +
+      (bat ? '<p style="margin-top:6px">Your bat: <b>' + bat.name + '</b> (' + bat.role + ') — that\'s your home screen.</p>' : '') +
+      '<p class="note" style="margin-top:8px">' + (me.showcaseUnlocked
+        ? '🎤 Showcase bookings are open — book your date from your producer page.'
+        : '🎤 Your showcase date unlocks at ' + me.memberGoal + ' members (' + me.members + ' so far).') + '</p>';
+    return;
+  }
+  if (!status.configured) {
+    body.innerHTML = '<p class="note">Claims open the moment VBEATS launches — hold at least ' + esc(status.threshold) + ' and this page mints your pass. Your wallet is connected and ready.</p>';
+    return;
+  }
+  if (elig && !elig.eligible) {
+    body.innerHTML =
+      '<p>This wallet holds <b>' + esc(elig.balanceFormatted) + ' VBEATS</b> — the pass needs <b>' + esc(elig.threshold) + '</b>.</p>' +
+      '<p class="note" style="margin-top:6px">Top up on Pons (steps above), then come back — the claim takes one signature.</p>' +
+      '<div style="margin-top:12px"><button class="btn" id="recheck">Check again</button></div>';
+    document.getElementById('recheck').onclick = renderClaim;
+    return;
+  }
+  body.innerHTML =
+    '<p>✅ This wallet holds <b>' + esc(elig ? elig.balanceFormatted : '10+') + ' VBEATS</b> — you\'re eligible.</p>' +
+    batPickerHtml() +
+    '<div style="margin-top:14px"><button class="btn" id="claim" ' + (selectedBat ? '' : 'disabled') + '>Claim my Volt Pass</button></div>' +
+    '<p class="note" style="margin-top:8px">One signature, no gas. The pass is minted to this address on Base.</p>';
+  body.querySelectorAll('.bat-pick').forEach(el => el.onclick = () => {
+    selectedBat = el.dataset.bat;
+    localStorage.setItem('vbeats_bat', selectedBat);
+    renderClaim();
+  });
+  const claimBtn = document.getElementById('claim');
+  if (claimBtn) claimBtn.onclick = doClaim;
+}
+
+async function connect() {
+  try {
+    setMsg('');
+    if (typeof ethers === 'undefined') throw new Error('Wallet library failed to load — check your connection and refresh.');
+    if (!window.ethereum) throw new Error('No wallet found — set one up with the Coinbase link above, then come back.');
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    await provider.send('eth_requestAccounts', []);
+    signer = await provider.getSigner();
+    address = await signer.getAddress();
+    renderClaim();
+  } catch (e) { setMsg(errBox(e.message || String(e))); }
+}
+
+async function doClaim() {
+  try {
+    setMsg('');
+    const btn = document.getElementById('claim');
+    btn.disabled = true; btn.textContent = 'Sign in your wallet…';
+    const message = 'vbeats-pass-claim:' + address + ':' + selectedBat + ':' + Date.now();
+    const signature = await signer.signMessage(message);
+    btn.textContent = 'Minting your pass…';
+    const res = await fetch(API + '/v1/pass/claim', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address, bat: selectedBat, message, signature }),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error((data && data.error && data.error.message) || ('Claim failed (HTTP ' + res.status + ')'));
+    setMsg('<div class="card" style="border-color:var(--gold,#e8b64c)"><b>🎟️ Pass claimed — you\'re member #' + esc(data.memberNumber) + '.</b><br><span class="note">Welcome to the founding producers. Volt keeps the receipts. 🦇</span></div>');
+    await loadStatus();
+  } catch (e) {
+    setMsg(errBox(e.message || String(e)));
+    renderClaim();
+  }
+}
+
+loadStatus();
+</script>
+</body>
+</html>

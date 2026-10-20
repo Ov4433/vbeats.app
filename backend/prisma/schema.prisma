@@ -107,3 +107,17 @@ model Play {
   @@index([userId])
   @@index([createdAt])
 }
+
+// A Volt Pass claim (token-gated buy-in). One per wallet; memberNumber is
+// the pass tokenId on Base — the member counter and the showcase gate
+// (unlocks at SHOWCASE_MEMBER_GOAL members) read from here / on-chain.
+model PassClaim {
+  id            String   @id @default(cuid())
+  walletAddress String   @unique
+  bat           String
+  memberNumber  Int      @unique
+  txHash        String?
+  createdAt     DateTime @default(now())
+
+  @@index([createdAt])
+}

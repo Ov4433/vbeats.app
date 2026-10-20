@@ -37,6 +37,19 @@ export const config = {
   // RPC/contract vars above are set), each upload fires a registerBeat tx.
   // Leave empty to disable on-chain writes entirely.
   relayerKey: process.env.RELAYER_KEY ?? '',
+  // --- Volt Pass claim flow (token-gated) ---
+  // Robinhood Chain RPC (VBEATS lives there; Pons chain, id 4663).
+  rhcRpcUrl:
+    process.env.RHC_RPC_URL ?? 'https://rpc.mainnet.chain.robinhood.com',
+  // VBEATS token contract on Robinhood Chain. Empty until the token
+  // launches — claims stay closed while unset.
+  vbeatsTokenAddress: process.env.VBEATS_TOKEN_ADDRESS ?? '',
+  // VoltPass v2 contract on Base. Empty until the v2 deploy lands.
+  voltPassAddress: process.env.VOLT_PASS_ADDRESS ?? '',
+  // How many VBEATS a wallet must hold to claim the pass.
+  passHoldThreshold: process.env.PASS_HOLD_THRESHOLD ?? '10',
+  // Showcase bookings unlock when the member (pass holder) count hits this.
+  showcaseMemberGoal: Number(process.env.SHOWCASE_MEMBER_GOAL ?? 100),
 };
 
 export function assertSecretsInProduction() {

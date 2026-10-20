@@ -55,7 +55,10 @@ async function main() {
   console.log(`BeatOffers deployed to:      ${offersAddress}`);
 
   const VoltPass = await ethers.getContractFactory("VoltPass");
-  const voltPass = await VoltPass.deploy();
+  // v2: constructor takes the initial relayer (the account allowed to mint
+  // claim passes). Locally we use the deployer; production deploys through
+  // web/deploy.html with the studio relayer wallet.
+  const voltPass = await VoltPass.deploy(deployer.address);
   await voltPass.waitForDeployment();
   const voltPassAddress = await voltPass.getAddress();
   console.log(`VoltPass deployed to:        ${voltPassAddress}`);

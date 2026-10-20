@@ -8,7 +8,10 @@ describe("VoltPass", function () {
   async function deploy() {
     const [owner, producer, relayer, stranger] = await ethers.getSigners();
     const factory = await ethers.getContractFactory("VoltPass");
-    const pass = (await factory.deploy()) as unknown as VoltPass;
+    const pass = (await factory.deploy(
+      relayer.address
+    )) as unknown as VoltPass;
+    await pass.connect(owner).setPublicMintOpen(true);
     return { pass, owner, producer, relayer, stranger };
   }
 
@@ -97,5 +100,48 @@ describe("VoltPass", function () {
     const { pass } = await deploy();
     expect(await pass.MAX_SUPPLY()).to.equal(1000);
     expect(await pass.MINT_PRICE()).to.equal(PRICE);
+  });
+
+  it("v2: public mint ships closed until the owner opens it", async function () {
+    const [owner, producer, relayer] = await ethers.getSigners();
+    const factory = await ethers.getContractFactory("VoltPass");
+    const pass = (await factory.deploy(relayer.address)) as unknown as VoltPass;
+    expect(await pass.publicMintOpen()).to.equal(false);
+    await expect(
+      pass.connect(producer).mint({ value: PRICE })
+    ).to.be.revertedWith("VoltPass: public mint closed");
+    await pass.connect(owner).setPublicMintOpen(true);
+    await expect(pass.connect(producer).mint({ value: PRICE }))
+      .to.emit(pass, "PassMinted")
+      .withArgs(producer.address, 1, false);
+  });
+
+  it("v2: relayer mints claim passes via mintFor, free and gasless for the holder", async function () {
+    const { pass, producer, relayer, stranger } = await deploy();
+    expect(await pass.relayer()).to.equal(relayer.address);
+    await expect(pass.connect(relayer).mintFor(producer.address))
+      .to.emit(pass, "PassMinted")
+      .withArgs(producer.address, 1, true);
+    expect(await pass.hasPass(producer.address)).to.equal(true);
+    expect(await pass.totalMinted()).to.equal(1);
+    // One per account applies to claim mints too.
+    await expect(
+      pass.connect(relayer).mintFor(producer.address)
+    ).to.be.revertedWith("VoltPass: one pass per account");
+    // A stranger cannot mint claims.
+    await expect(
+      pass.connect(stranger).mintFor(stranger.address)
+    ).to.be.revertedWith("VoltPass: not authorized");
+    // Claim passes are soulbound like any other.
+    await expect(
+      pass.connect(producer).transferFrom(producer.address, stranger.address, 1)
+    ).to.be.revertedWith("VoltPass: soulbound");
+  });
+
+  it("v2: owner can also mintFor (studio-key fallback)", async function () {
+    const { pass, owner, producer } = await deploy();
+    await expect(pass.connect(owner).mintFor(producer.address))
+      .to.emit(pass, "PassMinted")
+      .withArgs(producer.address, 1, true);
   });
 });
