@@ -1,6 +1,40 @@
 /* Verified Beats Studio — shared API client + nav */
 window.VBEATS_API = window.VBEATS_API || 'https://vbeats-api.onrender.com';
 
+// --- Wallet library (ethers) lazy loader ---
+// Most pages don't include the ethers script tag, and on some phones /
+// networks the CDN is blocked outright — so load it on first use, trying
+// each CDN in turn, instead of failing the tap with "library failed".
+let _ethersLoading = null;
+function ensureEthers() {
+  if (typeof ethers !== 'undefined') return Promise.resolve();
+  if (_ethersLoading) return _ethersLoading;
+  const CDNS = [
+    'https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.min.js',
+    'https://unpkg.com/ethers@6.13.4/dist/ethers.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.4/ethers.umd.min.js',
+  ];
+  _ethersLoading = (async () => {
+    for (const url of CDNS) {
+      try {
+        await new Promise((resolve, reject) => {
+          const s = document.createElement('script');
+          s.src = url;
+          s.async = true;
+          s.onload = resolve;
+          s.onerror = reject;
+          document.head.appendChild(s);
+        });
+        if (typeof ethers !== 'undefined') return;
+      } catch { /* blocked or slow — try the next CDN */ }
+    }
+    _ethersLoading = null; // let a later tap retry from scratch
+    throw new Error('Wallet library failed to load — your connection is blocking it. Try another network or browser, then tap again.');
+  })();
+  return _ethersLoading;
+}
+window.ensureEthers = ensureEthers;
+
 // --- Chain config (Base mainnet). Contract addresses are empty until deploy. ---
 window.VBEATS_CHAIN_ID = window.VBEATS_CHAIN_ID || 8453;
 window.VBEATS_RPC_URL = window.VBEATS_RPC_URL || 'https://mainnet.base.org';
@@ -101,7 +135,7 @@ const api = {
 
   async connectWallet() {
     if (!window.ethereum) throw new Error('No wallet found — install MetaMask');
-    if (typeof ethers === 'undefined') throw new Error('Wallet library failed to load — check your connection');
+    await ensureEthers();
     const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
     if (!accounts || !accounts.length) throw new Error('No accounts authorized');
     await this.ensureBaseChain();
@@ -134,7 +168,7 @@ const api = {
   async getSigner() {
     if (!this.wallet) throw new Error('Connect your wallet first');
     if (!window.ethereum) throw new Error('No wallet found');
-    if (typeof ethers === 'undefined') throw new Error('Wallet library failed to load');
+    await ensureEthers();
     await this.ensureBaseChain();
     return new ethers.BrowserProvider(window.ethereum).getSigner();
   },
@@ -148,7 +182,7 @@ const api = {
   /** On-chain producer (beat owner) for a fingerprint, via the registry. */
   async producerOf(fingerprint) {
     if (!window.VBEATS_REGISTRY_ADDRESS || !fingerprint) return null;
-    if (typeof ethers === 'undefined') throw new Error('Wallet library failed to load');
+    await ensureEthers();
     try {
       const provider = new ethers.JsonRpcProvider(window.VBEATS_RPC_URL);
       const reg = new ethers.Contract(

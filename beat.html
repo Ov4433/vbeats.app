@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Beat — Verified Beats Studio</title>
-<link rel="icon" href="https://raw.githubusercontent.com/Ov4433/vbeats.app/main/web/assets/logo.png">
+<link rel="icon" href="assets/logo.png">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -13,8 +13,10 @@
   <div id="err"></div>
   <div id="beat"></div>
 </main>
-<footer class="footer"><div class="footer-bat"><img src="https://raw.githubusercontent.com/Ov4433/vbeats.app/main/web/assets/mascot-profile.webp" alt=""></div>Verified Beats Studio — Volt keeps the receipts.</footer>
+<footer class="footer"><div class="footer-bat"><img src="assets/mascot-profile.webp" alt=""></div>Verified Beats Studio — Volt keeps the receipts.</footer>
 <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.min.js"></script>
+<script>if (typeof ethers === 'undefined') document.write('<script src="https://unpkg.com/ethers@6.13.4/dist/ethers.min.js"><\/script>');</script>
+<script>if (typeof ethers === 'undefined') document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.4/ethers.umd.min.js"><\/script>');</script>
 <script src="js/api.js"></script>
 <script src="js/volt.js"></script>
 <script>
@@ -68,7 +70,7 @@ async function load() {
         <div id="cardback">${cardBack(b.stats)}</div>
       </div>
       <div class="mascot-says">
-        <img src="https://raw.githubusercontent.com/Ov4433/vbeats.app/main/web/assets/mascot-profile.webp" alt="">
+        <img src="assets/mascot-profile.webp" alt="">
         <div class="bubble">🦇 The fingerprint doesn't lie. If it's <b>verified</b>, this is the real audio.</div>
       </div>`;
     // Card-back play tracking: count the play once, report listen time on pause.
@@ -193,7 +195,7 @@ async function loadOffers() {
       nudge.style.display = '';
       nudge.innerHTML = `
         <div class="mascot-says">
-          <img src="https://raw.githubusercontent.com/Ov4433/vbeats.app/main/web/assets/mascot-profile.webp" alt="">
+          <img src="assets/mascot-profile.webp" alt="">
           <div class="bubble">\U0001F987 This one's gone quiet \u2014 ${stalled.rounds} rounds, no movement for over a day.
           A <b>final offer</b> (24 hours, take-it-or-leave-it) is usually what closes it.</div>
         </div>`;
