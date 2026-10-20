@@ -3,99 +3,131 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Verified Beats Studio</title>
-<link rel="icon" href="https://raw.githubusercontent.com/Ov4433/vbeats.app/main/web/assets/logo.png">
+<title>Verified Beats Studio — Feed</title>
+<link rel="icon" href="assets/logo.png">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 <nav class="nav" id="nav"></nav>
 
-<header class="hero wrap">
-  <div class="hero-banner">
-    <img src="https://raw.githubusercontent.com/Ov4433/vbeats.app/main/web/assets/hero-banner.webp" alt="The studio bat in the neon booth">
-    <div class="hero-banner-text">
-      <h1>Verified <span>Beats</span> Studio</h1>
-      <p>You bring the beats. <b>Volt keeps the receipts.</b></p>
-    </div>
-  </div>
-  <div class="hero-mascot" style="margin-top:26px">
-    <div class="bubble">🦇 <b>Welcome to the studio.</b><br><span style="color:var(--mut);font-size:14px">Every upload fingerprinted &amp; verified on-chain.</span></div>
-  </div>
-  <p>The marketplace where every beat is fingerprinted, verified, and provably yours — on-chain provenance for producers.</p>
-  <div class="hero-cta">
-    <a class="btn" href="marketplace.html">Browse beats</a>
-    <a class="btn ghost" href="studio.html">Open the studio</a>
-    <button class="btn ghost" onclick="Volt.startTour()">🦇 Tour with Volt</button>
-  </div>
-</header>
-
 <main class="wrap">
-  <div class="feats">
-    <div class="feat"><div class="ic">🔒</div><h3>On-chain provenance</h3><p>Every upload gets a SHA-256 fingerprint registered on Base. Anyone can verify a beat's origin in one click.</p></div>
-    <div class="feat"><div class="ic">🎙️</div><h3>Browser studio</h3><p>Record straight from your mic, watch the levels, name it, and publish — no app install.</p></div>
-    <div class="feat"><div class="ic">⚡</div><h3>Instant delivery</h3><p>Uploads go live immediately with streaming previews for buyers.</p></div>
+  <!-- Stories row: quick moves, app-style -->
+  <div class="stories">
+    <a class="story rec" href="studio.html">
+      <span class="ring"><span class="glyph">⏺</span></span><span>You · Record</span>
+    </a>
+    <a class="story" href="upload.html">
+      <span class="ring"><img src="assets/mascot-profile.webp" alt=""></span><span>Upload</span>
+    </a>
+    <a class="story" href="claim.html">
+      <span class="ring"><span class="glyph">🎟️</span></span><span>Volt Pass</span>
+    </a>
+    <a class="story" href="marketplace.html">
+      <span class="ring"><span class="glyph">🧭</span></span><span>Explore</span>
+    </a>
+    <a class="story" href="cards.html">
+      <span class="ring"><span class="glyph">🃏</span></span><span>Cards</span>
+    </a>
+    <a class="story" href="chat.html">
+      <span class="ring"><span class="glyph">💬</span></span><span>The Booth</span>
+    </a>
   </div>
 
-  <div class="mascot-band">
-    <img src="https://raw.githubusercontent.com/Ov4433/vbeats.app/main/web/assets/mascot.webp" alt="Studio mascot">
-    <div>
-      <h2>Meet Volt</h2>
-      <p>He's the studio's night-shift manager, Volt. Every beat that comes through gets fingerprinted, logged, and verified before it hits the marketplace — he doesn't let fakes through the door.</p>
-      <div class="mascot-says">
-        <img src="https://raw.githubusercontent.com/Ov4433/vbeats.app/main/web/assets/mascot-profile.webp" alt="">
-        <div class="bubble">Producers upload. I verify. Buyers <b>know</b> it's real. That's the whole game.</div>
-      </div>
-      <p style="margin-top:14px"><a class="btn small" href="upload.html">Upload your first beat</a></p>
+  <div class="hero-mascot" style="margin:6px 0 4px">
+    <div class="bubble">🦇 <b>Welcome to the studio.</b> <span style="color:var(--mut);font-size:14px">Every beat in this feed is fingerprinted &amp; verified on-chain. Volt keeps the receipts.</span></div>
+  </div>
+
+  <div class="feed">
+    <div class="feed-toggle">
+      <button id="tg-following" class="on" onclick="setFeed('following')">Following</button>
+      <button id="tg-trending" onclick="setFeed('trending')">Trending</button>
     </div>
-  </div>
-
-  <div class="card" style="margin-bottom:60px">
-    <h2 style="margin-bottom:10px">Latest drops</h2>
-    <p class="note" style="margin-bottom:16px">Live from the marketplace API.</p>
-    <div class="grid" id="latest"></div>
+    <div id="feed"><p class="note" style="text-align:center;padding:24px">Loading the feed…</p></div>
   </div>
 </main>
 
-<footer class="footer"><div class="footer-bat"><img src="https://raw.githubusercontent.com/Ov4433/vbeats.app/main/web/assets/mascot-profile.webp" alt=""></div>Verified Beats Studio — Volt keeps the receipts.</footer>
+<footer class="footer"><div class="footer-bat"><img src="assets/mascot-profile.webp" alt=""></div>Verified Beats Studio — Volt keeps the receipts.</footer>
 
 <script src="js/api.js"></script>
 <script src="js/volt.js"></script>
 <script>
 nav('index.html');
-api.marketplace({ limit: 4 }).then(d => {
-  const beats = d.beats || [];
-  document.getElementById('latest').innerHTML = beats.length
-    ? beats.map(beatCard).join('')
-    : `<div style="grid-column:1/-1;text-align:center;padding:20px">
-        <img src="https://raw.githubusercontent.com/Ov4433/vbeats.app/main/web/assets/mascot-profile.webp" alt="" style="width:110px;border-radius:50%;margin-bottom:10px">
-        <p class="note">No beats yet — be the first to upload.</p></div>`;
+
+let allBeats = [];
+let feedMode = 'following';
+let currentAudio = null;
+let playStartedAt = 0;
+let playingId = '';
+
+api.marketplace({ limit: 12 }).then(d => {
+  allBeats = d.beats || [];
+  renderFeed();
 }).catch(() => {
-  document.getElementById('latest').innerHTML = '<p class="note">Marketplace is waking up (free tier cold start) — try again in a few seconds.</p>';
+  document.getElementById('feed').innerHTML = '<p class="note" style="text-align:center;padding:24px">Marketplace is waking up (free tier cold start) — refresh in a few seconds.</p>';
 });
 
-let currentAudio = null;
-function beatCard(b) {
-  return `<div class="beat-card" onclick="location.href='beat.html?id=${esc(b.id)}'">
-    <img class="beat-art" src="${esc(api.artUrl(b))}" alt="" loading="lazy">
-    <div class="beat-body">
-      <div class="beat-title">${esc(b.title)}</div>
-      <div class="beat-sub">${esc(b.genre)}${b.bpm ? ' · ' + esc(b.bpm) + ' BPM' : ''}${b.duration || b.dur ? ' · ' + fmtDur(b.duration || b.dur) : ''}</div>
-      <div class="beat-meta"><span class="price">$${esc(b.price)}</span></div>
-      <div class="play-row">
-        <button class="play-btn" onclick="event.stopPropagation();togglePlay(this,'${esc(api.mediaUrl(b))}')">▶</button>
-        <a class="btn small ghost" href="beat.html?id=${esc(b.id)}" onclick="event.stopPropagation()">Details</a>
-      </div>
-    </div></div>`;
+function setFeed(mode) {
+  feedMode = mode;
+  document.getElementById('tg-following').classList.toggle('on', mode === 'following');
+  document.getElementById('tg-trending').classList.toggle('on', mode === 'trending');
+  renderFeed();
 }
-function togglePlay(btn, url) {
-  if (!url) return;
-  if (currentAudio && !currentAudio.paused && currentAudio.dataset.url === url) {
-    currentAudio.pause(); btn.classList.remove('playing'); btn.textContent = '▶'; return;
+
+function renderFeed() {
+  const box = document.getElementById('feed');
+  if (!allBeats.length) {
+    box.innerHTML = `<div style="text-align:center;padding:28px 16px">
+      <img src="assets/mascot-profile.webp" alt="" style="width:110px;border-radius:50%;margin-bottom:10px">
+      <p class="note">No beats yet — be the first to drop one.</p>
+      <p style="margin-top:14px"><a class="btn" href="studio.html">⏺ Open the studio</a></p></div>`;
+    return;
   }
-  if (currentAudio) { currentAudio.pause(); document.querySelectorAll('.play-btn.playing').forEach(x => { x.classList.remove('playing'); x.textContent = '▶'; }); }
-  currentAudio = new Audio(url); currentAudio.dataset.url = url;
+  const beats = feedMode === 'trending'
+    ? [...allBeats].sort((a, b) => (Number(b.price) || 0) - (Number(a.price) || 0))
+    : allBeats;
+  box.innerHTML = beats.map(post).join('');
+}
+
+function post(b) {
+  const art = esc(api.artUrl(b));
+  return `<article class="post">
+    <div class="post-head">
+      <img src="${art}" alt="">
+      <div>
+        <div class="who">${esc(b.title)}</div>
+        <div class="sub">${esc(b.genre)}${b.bpm ? ' · ' + esc(b.bpm) + ' BPM' : ''}${b.duration || b.dur ? ' · ' + fmtDur(b.duration || b.dur) : ''}</div>
+      </div>
+      <span class="chip">✓ VERIFIED ON-CHAIN</span>
+    </div>
+    <img class="post-art" src="${art}" alt="" loading="lazy">
+    <div class="post-body">
+      <div class="post-actions">
+        <button class="play-btn" data-id="${esc(b.id)}" onclick="togglePlay(this,'${esc(b.id)}','${esc(api.mediaUrl(b))}')">▶</button>
+        <span class="price">$${esc(b.price)}</span>
+        <a class="btn small" href="beat.html?id=${esc(b.id)}">Lease / Mint</a>
+        <a class="btn small ghost" href="beat.html?id=${esc(b.id)}">Make offer</a>
+        <a class="btn small ghost" href="studio.html">Remix</a>
+      </div>
+    </div>
+  </article>`;
+}
+
+function stopCurrent(btn) {
+  if (!currentAudio) return;
+  const listened = Math.round((Date.now() - playStartedAt) / 1000);
+  if (playingId && listened > 1) api.play(playingId, listened);
+  currentAudio.pause();
+  currentAudio = null; playingId = '';
+  document.querySelectorAll('.play-btn.playing').forEach(x => { x.classList.remove('playing'); x.textContent = '▶'; });
+}
+
+function togglePlay(btn, id, url) {
+  if (!url) return;
+  if (currentAudio && playingId === id && !currentAudio.paused) { stopCurrent(btn); return; }
+  stopCurrent(btn);
+  currentAudio = new Audio(url); playingId = id; playStartedAt = Date.now();
   currentAudio.play(); btn.classList.add('playing'); btn.textContent = '⏸';
-  currentAudio.onended = () => { btn.classList.remove('playing'); btn.textContent = '▶'; };
+  currentAudio.onended = () => stopCurrent(btn);
 }
 </script>
 </body>

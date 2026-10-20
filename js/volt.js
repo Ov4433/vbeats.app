@@ -4,11 +4,11 @@
 
   const TOURS = {
     'index.html': [
-      { sel: '.hero-banner', text: "Welcome to <b>Verified Beats Studio</b>. I'm <b>Volt</b> — night-shift manager. Let me show you around." },
-      { sel: '.feats', text: "Every beat here is <b>fingerprinted and verified on-chain</b>. No fakes get past me." },
-      { sel: '.mascot-band', text: "That's me. I check every upload before it hits the marketplace." },
-      { sel: '#latest', text: "Fresh drops land here. Hit play, or open one to see its verification receipt." },
-      { sel: '.hero-cta', text: "Ready? Browse the beats, or jump in the studio and record your own. Tour over — go make noise. 🦇" },
+      { sel: '.stories', text: "Welcome to <b>Verified Beats Studio</b>. I'm <b>Volt</b> — night-shift manager. Quick moves live up here: record, upload, your pass." },
+      { sel: '.feed', text: "This is the <b>feed</b>. Every beat in it is <b>fingerprinted and verified on-chain</b>. No fakes get past me." },
+      { sel: '.post', text: "Hit play right in the feed — or tap <b>Lease / Mint</b> to open the beat's card: receipt, offers, all of it." },
+      { sel: '.tabbar', text: "Home, Explore, Record, Cards, Profile — the whole app lives down here now." },
+      { sel: '.tabbar .rec-btn', text: "That big red button? The studio. Tour over — go make noise. 🦇" },
     ],
     'marketplace.html': [
       { sel: '#q', text: "The vault. Search by name, filter by genre — find your next sound." },

@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Profile — Verified Beats Studio</title>
+<link rel="icon" href="assets/logo.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<nav class="nav" id="nav"></nav>
+
+<main class="wrap" style="max-width:720px">
+  <div style="padding:26px 0 6px">
+    <h1 style="font-size:30px;margin-bottom:6px">Profile</h1>
+    <p class="note">Your wallet, your pass, your beats.</p>
+  </div>
+
+  <div class="card" style="margin:18px 0">
+    <h3 style="margin-bottom:10px">Wallet</h3>
+    <div id="wallet-box"><p class="note">Checking…</p></div>
+  </div>
+
+  <div class="card" style="margin:18px 0">
+    <h3 style="margin-bottom:10px">Volt Founding Producer Pass</h3>
+    <div id="pass-box"><p class="note">Connect a wallet to see your pass.</p></div>
+  </div>
+
+  <div class="card" style="margin:18px 0">
+    <h3 style="margin-bottom:10px">Account</h3>
+    <div id="account-box"><p class="note">Checking…</p></div>
+  </div>
+
+  <div class="card" id="uploads-card" style="margin:18px 0 50px;display:none">
+    <h3 style="margin-bottom:10px">Your uploads</h3>
+    <div id="uploads-box"></div>
+  </div>
+</main>
+
+<footer class="footer"><div class="footer-bat"><img src="assets/mascot-profile.webp" alt=""></div>Verified Beats Studio — Volt keeps the receipts.</footer>
+
+<script src="js/api.js"></script>
+<script src="js/volt.js"></script>
+<script>
+nav('profile.html');
+renderProfile();
+
+function renderProfile() {
+  const w = api.wallet;
+  document.getElementById('wallet-box').innerHTML = w
+    ? `<p style="margin-bottom:6px"><b>${esc(w)}</b></p>
+       <p class="note" style="margin-bottom:12px">Network: Base · Chain ID ${window.VBEATS_CHAIN_ID}</p>
+       <button class="btn ghost small" onclick="disconnect()">Disconnect</button>`
+    : `<p class="note" style="margin-bottom:12px">No wallet connected yet.</p>
+       <button class="btn small" onclick="connect()">Connect wallet</button>`;
+
+  document.getElementById('account-box').innerHTML = api.loggedIn()
+    ? `<p class="note" style="margin-bottom:12px">Signed in to Verified Beats Studio.</p>
+       <button class="btn ghost small" onclick="api.logout(); renderProfile(); renderUser();">Log out</button>`
+    : `<p class="note" style="margin-bottom:12px">Not signed in.</p>
+       <a class="btn ghost small" href="upload.html">Sign in</a>`;
+
+  if (w) loadPass(w);
+  loadUploads();
+}
+
+async function connect() {
+  try { await api.connectWallet(); renderProfile(); renderUser(); }
+  catch (e) { alert(e.message); }
+}
+function disconnect() {
+  api.disconnectWallet(); renderProfile(); renderUser();
+}
+
+async function loadPass(w) {
+  const box = document.getElementById('pass-box');
+  try {
+    const me = await api.get('/v1/pass/me/' + w);
+    if (me && me.hasPass) {
+      box.innerHTML = `<p style="margin-bottom:6px">🦇 <b>Pass #${esc(me.memberNumber)} — Founding Producer</b></p>
+        <p class="note">Home bat: ${esc(me.bat || 'volt')} · Claimed on Base.</p>`;
+      return;
+    }
+    const st = await api.get('/v1/pass/status');
+    if (!st.configured) {
+      box.innerHTML = `<p class="note" style="margin-bottom:12px">Claims open at token launch — hold ${esc(st.threshold)} VBEATS to claim yours.</p>
+        <a class="btn small" href="claim.html">See how to claim</a>`;
+      return;
+    }
+    const el = await api.get('/v1/pass/eligibility/' + w);
+    box.innerHTML = el && el.eligible
+      ? `<p class="note" style="margin-bottom:12px">You're holding ${esc(el.balance)} VBEATS — your pass is ready to claim.</p>
+         <a class="btn small" href="claim.html">Claim your pass</a>`
+      : `<p class="note" style="margin-bottom:12px">You hold ${esc((el && el.balance) ?? '0')} of ${esc(st.threshold)} VBEATS needed to claim.</p>
+         <a class="btn small" href="claim.html">How to get VBEATS</a>`;
+  } catch {
+    box.innerHTML = '<p class="note">Pass service is waking up — refresh in a few seconds.</p>';
+  }
+}
+
+async function loadUploads() {
+  if (!api.loggedIn()) return;
+  try {
+    const d = await api.get('/v1/beats');
+    const beats = (d && (d.beats || d)) || [];
+    if (!Array.isArray(beats) || !beats.length) return;
+    document.getElementById('uploads-card').style.display = '';
+    document.getElementById('uploads-box').innerHTML = beats.map(b =>
+      `<p style="padding:7px 0;border-bottom:1px solid var(--line)">
+         <a href="beat.html?id=${esc(b.id)}"><b>${esc(b.title)}</b></a>
+         <span class="note"> · ${esc(b.genre)}${b.bpm ? ' · ' + esc(b.bpm) + ' BPM' : ''}</span></p>`).join('');
+  } catch { /* no uploads endpoint state — section stays hidden */ }
+}
+</script>
+</body>
+</html>
