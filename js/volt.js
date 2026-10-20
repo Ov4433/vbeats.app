@@ -29,6 +29,10 @@
       { sel: '#box', text: "The Booth — where producers talk shop, collabs, and drops." },
       { sel: '#composer', text: "Sign in and say hi. Keep it about the music — <b>I bite spammers.</b>" },
     ],
+    'claim.html': [
+      { sel: '#claim-card', text: "The Volt Pass. Hold <b>10 VBEATS</b>, connect the wallet that holds them, pick your bat — I mint the pass to that same address. No gas." },
+      { sel: '.bat-grid', text: "Your bat is your <b>home screen</b> now. Choose the lane you live in." },
+    ],
   };
 
   const LINKS = [
