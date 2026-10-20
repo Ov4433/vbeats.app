@@ -216,7 +216,7 @@ function nav(active) {
   const links = [
     ['index.html', 'Home'], ['marketplace.html', 'Explore'],
     ['studio.html', 'Studio'], ['chat.html', 'Chat'], ['upload.html', 'Upload'],
-    ['claim.html', 'Volt Pass'],
+    ['claim.html', 'Volt Pass'], ['deploy.html', 'Console'],
   ];
   const el = document.getElementById('nav');
   el.innerHTML =
