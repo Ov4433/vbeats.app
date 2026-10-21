@@ -262,8 +262,34 @@
     return new Uint8Array(buf);
   }
 
+  /* ---------- Draft autosave: pattern <-> JSON ----------
+     The studio keeps the working pattern in localStorage so a trip to the
+     sign-in page (or an accidental reload) doesn't eat it. Serialize is a
+     defensive clone; parse validates hard — a stored draft is untrusted
+     input (an older version of the page may have written it), so anything
+     off-shape returns null and the studio starts from its default empty
+     pattern instead of crashing the grid. */
+  function serializePattern(p) { return JSON.stringify(clone(p)); }
+  function parsePattern(json) {
+    let o = json;
+    if (typeof json === 'string') {
+      try { o = JSON.parse(json); } catch (e) { return null; }
+    }
+    if (!o || typeof o !== 'object') return null;
+    const bpm = Number(o.bpm);
+    if (!isFinite(bpm) || bpm < 40 || bpm > 240) return null;
+    const bits = a => (Array.isArray(a) && a.length === STEPS) ? a.map(v => v ? 1 : 0) : null;
+    const notes = a => (Array.isArray(a) && a.length === STEPS)
+      ? a.map(v => { const n = Number(v); return (v == null || !isFinite(n)) ? null : n; }) : null;
+    const kick = bits(o.kick), snare = bits(o.snare), hat = bits(o.hat);
+    const bass = notes(o.bass), melody = notes(o.melody);
+    if (!kick || !snare || !hat || !bass || !melody) return null;
+    return { bpm, kick, snare, hat, bass, melody };
+  }
+
   return { STEPS, MINOR, PENTA, MAJOR_PENTA, BASS_ROOT, MELODY_ROOT, STYLES,
     emptyPattern, clone, trackHits, countHits, activeLayers, noteName,
     buildFrame, rideBassline, findSpace, fiveSecondTest, stripBack,
-    adjustDensity, parseDescribe, barDurationSec, patternDurationSec, encodeWav };
+    adjustDensity, parseDescribe, barDurationSec, patternDurationSec, encodeWav,
+    serializePattern, parsePattern };
 });

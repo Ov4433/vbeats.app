@@ -6,30 +6,11 @@
 <title>Studio — Verified Beats Studio</title>
 <link rel="icon" href="https://raw.githubusercontent.com/Ov4433/vbeats.app/main/web/assets/logo.png">
 <link rel="stylesheet" href="css/style.css">
-<!-- pages-build: sequencer-publish + describe-a-beat -->
+<!-- pages-build: flow-fixes autosave reorder wallet-status -->
 </head>
 <body>
 <nav class="nav" id="nav"></nav>
 <main class="wrap" style="max-width:720px">
-  <div class="page-head"><div><h1>Recording Studio</h1><p>Record from your mic, then publish straight to the marketplace.</p></div></div>
-
-  <div class="card studio-booth">
-    <div class="booth-side">
-      <img src="https://raw.githubusercontent.com/Ov4433/vbeats.app/main/web/assets/mascot-profile.webp" alt="Studio mascot">
-      <div><span class="rec-lamp" id="lamp"></span><span id="status" style="color:var(--mut)">Ready</span></div>
-    </div>
-    <div class="timer" id="timer">0:00</div>
-    <div class="meter"><div id="meterfill"></div></div>
-    <button class="rec-btn" id="rec">●</button>
-    <p class="note" id="hint">Tap to start recording. Your browser will ask for mic permission.</p>
-    <div id="rec-err"></div>
-  </div>
-
-  <div class="mascot-says">
-    <img src="https://raw.githubusercontent.com/Ov4433/vbeats.app/main/web/assets/mascot-profile.webp" alt="">
-    <div class="bubble">🦇 I'm in the booth with you. <b>Hit record</b> — I'll keep the levels honest.</div>
-  </div>
-
   <h2 style="margin:26px 0 8px">Beat Maker</h2>
   <div class="card">
     <div class="seq-transport">
@@ -39,6 +20,7 @@
     </div>
     <div class="seq-grid" id="seq-grid"></div>
     <p class="note">Tap steps to write your own pattern — drums, bass, melody, one bar. Or open a session below and let the crew build with you.</p>
+    <p class="note" id="seq-draft-note" style="display:none">Draft restored — the pattern you were working on, auto-saved in this browser.</p>
     <div class="seq-pub">
       <div id="seq-pub-err"></div>
       <div class="field"><label>Title</label><input id="s-title" placeholder="Pattern Sketch"></div>
@@ -48,6 +30,7 @@
         </div>
         <div class="field"><label>Price (USD)</label><input id="s-price" type="number" min="0" step="0.01" value="9.99"></div>
       </div>
+      <div id="seq-pub-status"></div>
       <button class="btn" id="seq-pub-go" style="width:100%">Publish this pattern</button>
       <p class="note">Renders your bar looped ×4 to audio and publishes it the same way as a take. You need to be signed in — <a href="upload.html" style="color:var(--pur)">sign in here</a>.</p>
       <div id="seq-pub-done"></div>
@@ -83,6 +66,25 @@
       <p class="note" style="margin-top:0">Volt reads plain words: a style (boom bap, trap, house, drill), a tempo number, sparse or busy, dark or bright. Anything else, he'll admit he doesn't know it.</p>
       <div id="cop-log"><p class="note">Quiet in here. The crew only speaks when you call them.</p></div>
     </div>
+  </div>
+
+  <div class="page-head"><div><h1>Recording Studio</h1><p>Record from your mic, then publish straight to the marketplace.</p></div></div>
+
+  <div class="card studio-booth">
+    <div class="booth-side">
+      <img src="https://raw.githubusercontent.com/Ov4433/vbeats.app/main/web/assets/mascot-profile.webp" alt="Studio mascot">
+      <div><span class="rec-lamp" id="lamp"></span><span id="status" style="color:var(--mut)">Ready</span></div>
+    </div>
+    <div class="timer" id="timer">0:00</div>
+    <div class="meter"><div id="meterfill"></div></div>
+    <button class="rec-btn" id="rec">●</button>
+    <p class="note" id="hint">Tap to start recording. Your browser will ask for mic permission.</p>
+    <div id="rec-err"></div>
+  </div>
+
+  <div class="mascot-says">
+    <img src="https://raw.githubusercontent.com/Ov4433/vbeats.app/main/web/assets/mascot-profile.webp" alt="">
+    <div class="bubble">🦇 I'm in the booth with you. <b>Hit record</b> — I'll keep the levels honest.</div>
   </div>
 
   <h2 style="margin:26px 0 8px">Takes</h2>
@@ -208,10 +210,52 @@ $('pub-go').onclick = async () => {
   finally { $('pub-go').disabled = false; $('pub-go').textContent = 'Publish to marketplace'; }
 };
 
+/* Pattern draft autosave — the working pattern lives in this browser, so
+   leaving to sign in (or an accidental reload) doesn't eat it. The choke
+   point is StudioSeq's onChange hook: it fires on every pattern mutation
+   (cell taps, Clear, BPM, and every co-producer action via setPattern).
+   The draft is cleared only after a successful pattern publish, below. */
+const SEQ_DRAFT_KEY = 'vbeats_seq_draft';
+if (window.StudioSeq) {
+  StudioSeq.setOnChange(p => {
+    try { localStorage.setItem(SEQ_DRAFT_KEY, PatternLogic.serializePattern(p)); } catch { /* storage unavailable */ }
+  });
+  try {
+    const draft = PatternLogic.parsePattern(localStorage.getItem(SEQ_DRAFT_KEY));
+    if (draft && PatternLogic.countHits(draft)) {
+      StudioSeq.setPattern(draft);
+      $('seq-draft-note').style.display = '';
+    }
+  } catch { /* no usable draft — start from the default empty pattern */ }
+}
+
+/* Publish-block status: state the sign-in and wallet facts up front,
+   before the publish tap — not as an error after it. Rendered on load,
+   on wallet account changes, and again at each publish attempt. The
+   sign-in error inside the handler stays as the backstop. */
+function shortAddr(a) { return a.slice(0, 6) + '…' + a.slice(-4); }
+function renderSeqPubStatus() {
+  const box = $('seq-pub-status');
+  if (!box) return;
+  let html = '';
+  if (!api.loggedIn()) {
+    html += '<p class="note">You\'re not signed in — publishing will ask you to sign in on the Upload page first. Your pattern is auto-saved in this browser, so it\'ll still be here when you come back.</p>';
+  }
+  if (api.wallet) {
+    html += '<p class="note">On-chain owner: <b>' + esc(shortAddr(api.wallet)) + '</b> — with your wallet connected, this beat registers on-chain to that address.</p>';
+  } else {
+    html += '<p class="note">No wallet connected — this beat will post off-chain only (no on-chain registration). Connect a wallet — the <b>Connect wallet</b> button at the top of this page, or the Wallet card on your Profile page — to register it on-chain.</p>';
+  }
+  box.innerHTML = html;
+}
+renderSeqPubStatus();
+if (window.ethereum && window.ethereum.on) window.ethereum.on('accountsChanged', renderSeqPubStatus);
+
 /* Publish the sequencer pattern — same upload path as a take (api.upload),
    same fields, same sign-in behavior. The bar is rendered to WAV offline
    (looped ×4) by StudioSeq.renderWav using the sequencer's own voices. */
 $('seq-pub-go').onclick = async () => {
+  renderSeqPubStatus();
   try {
     if (!api.loggedIn()) throw new Error('Sign in first — open the Upload page to sign in, then come back.');
     const p = StudioSeq.getPattern();
@@ -235,6 +279,7 @@ $('seq-pub-go').onclick = async () => {
     // record; a local copy keyed by title is what makes it recoverable here.
     fd.append('pattern', JSON.stringify(p));
     const beat = await api.upload(fd);
+    try { localStorage.removeItem(SEQ_DRAFT_KEY); } catch { /* storage unavailable */ }
     try { localStorage.setItem('vbeats_pattern:' + title, JSON.stringify(p)); } catch { /* storage unavailable */ }
     $('seq-pub-done').innerHTML = `<div class="badge ok" style="margin-top:14px">✓ Published &amp; fingerprinted</div>
       <p class="note"><a href="beat.html?id=${esc(beat.id)}" style="color:var(--pur)">View your beat →</a></p>`;

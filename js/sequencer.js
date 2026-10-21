@@ -11,6 +11,19 @@
   let pattern = L.emptyPattern(95);
   let playing = false, curStep = 0, timer = null, nextTime = 0, actx = null;
 
+  /* Change hook — the single choke point for pattern mutations. Every
+     edit path funnels through render(): cell toggles call it directly,
+     Clear calls it, and every co-producer action goes through
+     setPattern(), which calls it. (The BPM input is the one exception —
+     it nudges pattern.bpm without a re-render, so it calls changed()
+     itself.) The studio page uses this to autosave a draft; playback
+     never touches it. */
+  let onChange = null;
+  function changed() {
+    if (!onChange) return;
+    try { onChange(pattern); } catch (e) { /* a broken save hook must never break the grid */ }
+  }
+
   const ROWS = [
     { key: 'kick', label: 'Kick', cls: 'seq-drums' },
     { key: 'snare', label: 'Snare', cls: 'seq-drums' },
@@ -43,6 +56,7 @@
       });
     });
     markStep();
+    changed();
   }
   function markStep() {
     grid.querySelectorAll('.seq-cell').forEach(c =>
@@ -148,7 +162,7 @@
   $('seq-clear').onclick = () => { pattern = L.emptyPattern(pattern.bpm); render(); };
   $('seq-bpm').addEventListener('input', e => {
     const v = parseInt(e.target.value, 10);
-    if (v >= 40 && v <= 240) pattern.bpm = v;
+    if (v >= 40 && v <= 240) { pattern.bpm = v; changed(); }
   });
 
   window.StudioSeq = {
@@ -156,6 +170,7 @@
     setPattern: (p) => { pattern = p; $('seq-bpm').value = p.bpm; render(); },
     render,
     renderWav,
+    setOnChange: (fn) => { onChange = typeof fn === 'function' ? fn : null; },
   };
   render();
 })();
