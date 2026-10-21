@@ -30,6 +30,7 @@ export interface SerializedBeat {
   bpm: number | null;
   price: number;
   userId: string;
+  isHouse: boolean;
   audioUrl: string | null;
   imageUrl: string | null;
   artworkUrl: string | null;
@@ -46,6 +47,9 @@ export interface SerializedBeat {
   updatedAt: string;
   // Card-back stats (populated by the beats controller, not stored)
   stats?: BeatCardStats;
+  // Vote totals (populated by the beats controller, not stored)
+  votes?: { totalWeight: number; count: number };
+  votedByMe?: boolean;
 }
 
 /** "Back of the baseball card" numbers for a beat. */
@@ -77,6 +81,7 @@ export function serializeBeat(beat: Beat): SerializedBeat {
     bpm: beat.bpm,
     price: beat.price,
     userId: beat.userId,
+    isHouse: beat.isHouse ?? false,
     audioUrl: beat.audioUrl,
     imageUrl: beat.imageUrl,
     artworkUrl: beat.imageUrl,

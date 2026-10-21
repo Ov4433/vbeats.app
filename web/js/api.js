@@ -111,6 +111,8 @@ const api = {
     return this.get('/v1/beats/marketplace?' + q.toString());
   },
   beat(id) { return this.get('/v1/beats/' + encodeURIComponent(id)); },
+  vote(id) { return this.post('/v1/beats/' + encodeURIComponent(id) + '/vote', {}); },
+  topVoted() { return this.get('/v1/beats/top-voted'); },
   verify(id) { return this.post('/v1/beats/' + encodeURIComponent(id) + '/verify', {}); },
   nft(id) { return this.get('/v1/beats/' + encodeURIComponent(id) + '/nft'); },
   offers(id) { return this.get('/v1/beats/' + encodeURIComponent(id) + '/offers'); },

@@ -20,6 +20,12 @@ import {
 import { publicBaseUrl } from '../utils/baseUrl';
 import { salesRanking, rankForBeat, playCounts } from '../services/rankService';
 import { beatOffers } from '../services/offerService';
+import {
+  computeVoteWeight,
+  voteTotals,
+  votedBeatIds,
+  topVoted,
+} from '../services/voteService';
 
 type Ranking = Awaited<ReturnType<typeof salesRanking>>;
 type Plays = Awaited<ReturnType<typeof playCounts>>;
@@ -46,6 +52,34 @@ function withCardStats<T extends { id: string }>(
 
 async function cardInputs(): Promise<[Ranking, Plays]> {
   return Promise.all([salesRanking(), playCounts()]);
+}
+
+type VoteTotals = Awaited<ReturnType<typeof voteTotals>>;
+
+/** Attach vote totals + the caller's own vote state to a serialized beat. */
+function withVotes<T extends { id: string }>(
+  beat: T,
+  totals: VoteTotals,
+  voted: Set<string>
+): T & { votes: { totalWeight: number; count: number }; votedByMe: boolean } {
+  return {
+    ...beat,
+    votes: totals.get(beat.id) ?? { totalWeight: 0, count: 0 },
+    votedByMe: voted.has(beat.id),
+  };
+}
+
+/** Vote totals for `beatIds` + which of them `userId` voted on (if any). */
+async function voteInputs(
+  userId: string | undefined,
+  beatIds: string[]
+): Promise<[VoteTotals, Set<string>]> {
+  return Promise.all([
+    voteTotals(beatIds),
+    userId
+      ? votedBeatIds(userId, beatIds)
+      : Promise.resolve(new Set<string>()),
+  ]);
 }
 
 // ---------------------------------------------------------------------------
@@ -114,12 +148,21 @@ export const listBeats = asyncHandler(async (req: Request, res: Response) => {
   const [total, beats] = await Promise.all([
     prisma.beat.count(),
     prisma.beat.findMany({
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ isHouse: 'desc' }, { createdAt: 'desc' }],
       skip,
       take: limit,
     }),
   ]);
-  res.json({ beats: beats.map(serializeBeat), total, page, limit });
+  const [totals, voted] = await voteInputs(
+    req.user?.id,
+    beats.map((b) => b.id)
+  );
+  res.json({
+    beats: beats.map((b) => withVotes(serializeBeat(b), totals, voted)),
+    total,
+    page,
+    limit,
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -213,7 +256,13 @@ export const getUserBeats = asyncHandler(async (req: Request, res: Response) => 
     where: { userId: req.user!.id },
     orderBy: { createdAt: 'desc' },
   });
-  res.json({ beats: beats.map(serializeBeat) });
+  const [totals, voted] = await voteInputs(
+    req.user!.id,
+    beats.map((b) => b.id)
+  );
+  res.json({
+    beats: beats.map((b) => withVotes(serializeBeat(b), totals, voted)),
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -241,14 +290,20 @@ export const marketplace = asyncHandler(async (req: Request, res: Response) => {
     prisma.beat.count({ where: where as never }),
     prisma.beat.findMany({
       where: where as never,
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ isHouse: 'desc' }, { createdAt: 'desc' }],
       skip,
       take: limit,
     }),
   ]);
   const [ranking, plays] = await cardInputs();
+  const [totals, voted] = await voteInputs(
+    req.user?.id,
+    beats.map((b) => b.id)
+  );
   res.json({
-    beats: beats.map((b) => withCardStats(serializeBeat(b), ranking, plays)),
+    beats: beats.map((b) =>
+      withVotes(withCardStats(serializeBeat(b), ranking, plays), totals, voted)
+    ),
     total,
     page,
     limit,
@@ -273,7 +328,13 @@ export const search = asyncHandler(async (req: Request, res: Response) => {
     orderBy: { createdAt: 'desc' },
     take: 50,
   });
-  res.json({ beats: beats.map(serializeBeat) });
+  const [totals, voted] = await voteInputs(
+    req.user?.id,
+    beats.map((b) => b.id)
+  );
+  res.json({
+    beats: beats.map((b) => withVotes(serializeBeat(b), totals, voted)),
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -283,7 +344,165 @@ export const getBeat = asyncHandler(async (req: Request, res: Response) => {
   const beat = await prisma.beat.findUnique({ where: { id: req.params.id } });
   if (!beat) throw new HttpError(404, 'Beat not found');
   const [ranking, plays] = await cardInputs();
-  res.json(withCardStats(serializeBeat(beat), ranking, plays));
+  const [totals, voted] = await voteInputs(req.user?.id, [beat.id]);
+  res.json(
+    withVotes(withCardStats(serializeBeat(beat), ranking, plays), totals, voted)
+  );
+});
+
+// ---------------------------------------------------------------------------
+// POST /v1/beats/:id/vote — toggle the current user's vote on a beat.
+// Weight is snapshotted at vote time from the voter's wallet (see
+// voteService.computeVoteWeight): pass holder 3, VBEATS holder 2, else 1.
+// ---------------------------------------------------------------------------
+export const toggleVote = asyncHandler(async (req: Request, res: Response) => {
+  const beat = await prisma.beat.findUnique({ where: { id: req.params.id } });
+  if (!beat) throw new HttpError(404, 'Beat not found');
+
+  const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
+  if (!user) throw new HttpError(404, 'User not found');
+
+  const existing = await prisma.vote.findUnique({
+    where: { beatId_userId: { beatId: beat.id, userId: user.id } },
+  });
+
+  if (existing) {
+    await prisma.vote.delete({ where: { id: existing.id } });
+    const totals = (await voteTotals([beat.id])).get(beat.id) ?? {
+      totalWeight: 0,
+      count: 0,
+    };
+    res.json({
+      voted: false,
+      totalWeight: totals.totalWeight,
+      voteCount: totals.count,
+      weight: 0,
+    });
+    return;
+  }
+
+  const weight = await computeVoteWeight(user.wallet ?? null);
+  await prisma.vote.create({
+    data: {
+      beatId: beat.id,
+      userId: user.id,
+      walletAddress: user.wallet ?? null,
+      weight,
+    },
+  });
+  const totals = (await voteTotals([beat.id])).get(beat.id) ?? {
+    totalWeight: 0,
+    count: 0,
+  };
+  res.json({
+    voted: true,
+    totalWeight: totals.totalWeight,
+    voteCount: totals.count,
+    weight,
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET /v1/beats/top-voted — public chart (optionalAuth).
+// `beats` is the current UTC week's ranking with house beats pinned first
+// (a house beat appears even with zero week votes, carrying its week
+// totals), followed by the ranked non-house beats. `allTime` is the pure
+// all-time top 10 (no pinning). Entries carry week totals in `beats` and
+// all-time totals in `allTime`.
+// ---------------------------------------------------------------------------
+export const topVotedChart = asyncHandler(async (req: Request, res: Response) => {
+  const { week, weekList, allTimeList } = await topVoted(10);
+
+  const houseBeats = await prisma.beat.findMany({ where: { isHouse: true } });
+  const houseIds = new Set(houseBeats.map((b) => b.id));
+
+  // Week totals for house beats that didn't make the week's ranking.
+  const weekById = new Map(weekList.map((r) => [r.beatId, r]));
+  const missingHouseIds = houseBeats
+    .map((b) => b.id)
+    .filter((id) => !weekById.has(id));
+  if (missingHouseIds.length > 0) {
+    const groups = await prisma.vote.groupBy({
+      by: ['beatId'],
+      where: {
+        beatId: { in: missingHouseIds },
+        createdAt: { gte: week.start, lt: week.end },
+      },
+      _sum: { weight: true },
+      _count: { beatId: true },
+    });
+    for (const g of groups) {
+      weekById.set(g.beatId, {
+        beatId: g.beatId,
+        totalWeight: g._sum.weight ?? 0,
+        count: g._count.beatId,
+      });
+    }
+  }
+
+  // House first (ordered among themselves by week weight, then count),
+  // then the ranked non-house beats in ranking order.
+  const pinnedHouse = houseBeats
+    .map((b) => ({
+      beat: b,
+      ranked: weekById.get(b.id) ?? { beatId: b.id, totalWeight: 0, count: 0 },
+    }))
+    .sort(
+      (a, b) =>
+        b.ranked.totalWeight - a.ranked.totalWeight ||
+        b.ranked.count - a.ranked.count
+    );
+  const rankedNonHouse = weekList.filter((r) => !houseIds.has(r.beatId));
+
+  const allTimeById = new Map(allTimeList.map((r) => [r.beatId, r]));
+
+  const allIds = [
+    ...new Set([
+      ...houseBeats.map((b) => b.id),
+      ...weekList.map((r) => r.beatId),
+      ...allTimeList.map((r) => r.beatId),
+    ]),
+  ];
+  const beatRows =
+    allIds.length > 0
+      ? await prisma.beat.findMany({ where: { id: { in: allIds } } })
+      : [];
+  const beatById = new Map(beatRows.map((b) => [b.id, b]));
+  // House beats are already in hand; make sure they resolve too.
+  for (const b of houseBeats) beatById.set(b.id, b);
+
+  const voted = req.user
+    ? await votedBeatIds(req.user.id, allIds)
+    : new Set<string>();
+
+  const entry = (
+    beatId: string,
+    totals: { totalWeight: number; count: number }
+  ) => {
+    const beat = beatById.get(beatId);
+    if (!beat) return null;
+    return {
+      ...serializeBeat(beat),
+      votes: { totalWeight: totals.totalWeight, count: totals.count },
+      votedByMe: voted.has(beatId),
+    };
+  };
+
+  const beats = [
+    ...pinnedHouse.map(({ beat, ranked }) => entry(beat.id, ranked)),
+    ...rankedNonHouse.map((r) => entry(r.beatId, r)),
+  ].filter(Boolean);
+
+  const allTime = allTimeList
+    .map((r) => entry(r.beatId, allTimeById.get(r.beatId) ?? r))
+    .filter(Boolean);
+
+  res.json({
+    weekStart: week.start.toISOString(),
+    weekEnd: week.end.toISOString(),
+    beats,
+    allTime,
+  });
 });
 
 export const beatOffersInfo = asyncHandler(async (req: Request, res: Response) => {

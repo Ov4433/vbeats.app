@@ -13,6 +13,8 @@ import {
   beatNftInfo,
   beatOffersInfo,
   recordPlay,
+  toggleVote,
+  topVotedChart,
 } from '../controllers/beatsController';
 import { requireAuth, optionalAuth } from '../middleware/auth';
 import { validateBody } from '../middleware/validate';
@@ -30,10 +32,13 @@ router.get('/:id/offers', beatOffersInfo);
 router.get('/search', requireAuth, search);
 router.get('/marketplace', requireAuth, marketplace);
 router.get('/user', requireAuth, getUserBeats);
+// Public chart: logged-in callers also get votedByMe, everyone else reads
+// it anonymously.
+router.get('/top-voted', optionalAuth, topVotedChart);
 
 // Public: beat detail doubles as the NFT token URI (marketplaces fetch it
-// without credentials).
-router.get('/:id', getBeat);
+// without credentials). optionalAuth lets getBeat compute votedByMe.
+router.get('/:id', optionalAuth, getBeat);
 
 router.use(requireAuth);
 
@@ -43,6 +48,7 @@ router.post('/', validateBody(beatCreateSchema), createBeat);
 router.put('/:id', validateBody(beatUpdateSchema), updateBeat);
 router.delete('/:id', deleteBeat);
 router.post('/:id/verify', verifyBeat);
+router.post('/:id/vote', toggleVote);
 router.get('/:id/nft', beatNftInfo);
 
 export default router;
