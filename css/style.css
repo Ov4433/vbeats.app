@@ -372,3 +372,35 @@ body.has-tabbar { padding-bottom: 88px; }
 .topvoted-genre { color: var(--mut); font-size: 12.5px; white-space: nowrap; }
 .topvoted-votes { font-weight: 800; color: var(--pur); white-space: nowrap; margin-left: auto; }
 .topvoted-badge { white-space: nowrap; }
+
+/* Bat picker (shared: claim page + profile) */
+.bat-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin-top:12px; }
+.bat-pick { text-align:left; padding:14px; border-radius:14px; border:1px solid var(--line); background:rgba(255,255,255,.02); cursor:pointer; color:inherit; width:100%; font:inherit; }
+.bat-pick.on { border-color:var(--gold, #e8b64c); box-shadow:0 0 0 1px var(--gold, #e8b64c) inset; }
+.bat-dot { display:inline-flex; align-items:center; justify-content:center; width:38px; height:38px; border-radius:50%; font-weight:800; font-size:18px; color:#0b0b10; margin-bottom:8px; }
+
+/* Home lead (bat-routed homepage) */
+.home-lead { border:1px solid var(--line); border-radius:var(--rad); background:var(--panel); padding:16px; margin:14px 0 6px; }
+.home-lead .lead-welcome { display:flex; align-items:flex-start; gap:10px; margin-bottom:12px; }
+.home-lead .lead-welcome p { flex:1; }
+.home-lead .lead-x { background:none; border:none; color:var(--mut); cursor:pointer; font-size:16px; line-height:1; padding:2px 4px; }
+.lead-tiles { display:flex; gap:10px; flex-wrap:wrap; }
+.lead-tile { flex:1 1 140px; display:flex; align-items:center; gap:10px; padding:12px 14px; border:1px solid var(--line); border-radius:12px; background:var(--panel2); color:var(--txt); text-decoration:none; font-weight:700; }
+.lead-tile .glyph { font-size:20px; }
+.lead-tile small { display:block; color:var(--mut); font-weight:400; }
+
+/* Daily V Team line (studio) */
+.daily-line { display:flex; gap:12px; align-items:flex-start; }
+.daily-line .bat-dot { flex:0 0 38px; margin-bottom:0; }
+.daily-line p { flex:1; }
+.daily-line .daily-who { font-weight:800; }
+
+/* Live sessions */
+.live-frame { position:relative; width:100%; aspect-ratio:16/9; border-radius:var(--rad); overflow:hidden; border:1px solid var(--line); background:#000; }
+.live-frame iframe { position:absolute; inset:0; width:100%; height:100%; border:0; }
+.live-dot { display:inline-block; width:9px; height:9px; border-radius:50%; background:#ff3b30; margin-right:6px; }
+
+/* Creator page */
+.creator-totals { display:grid; grid-template-columns:repeat(auto-fit,minmax(110px,1fr)); gap:12px; text-align:center; }
+.creator-totals .num { font-size:22px; font-weight:700; }
+.solana-chip { display:inline-block; padding:4px 10px; border-radius:999px; border:1px solid var(--line); background:var(--panel2); font-size:13px; }

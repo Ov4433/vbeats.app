@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Live Sessions — Verified Beats Studio</title>
+<link rel="icon" href="assets/logo.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<nav class="nav" id="nav"></nav>
+
+<main class="wrap" style="max-width:720px">
+  <div class="page-head"><div>
+    <h1>🎙️ Live studio sessions</h1>
+    <p>The crew, live in the booth. When a session is on, it plays right here.</p>
+  </div></div>
+
+  <div id="live-box"><p class="note" style="text-align:center;padding:24px">Checking the booth…</p></div>
+
+  <section id="featured-wrap" style="display:none;margin-top:22px">
+    <h2 style="margin-bottom:8px">🔥 This week's Top Voted #1</h2>
+    <div id="featured"></div>
+  </section>
+</main>
+
+<footer class="footer"><div class="footer-bat"><img src="assets/mascot-profile.webp" alt=""></div>Verified Beats Studio — Volt keeps the receipts.</footer>
+
+<script src="js/api.js"></script>
+<script src="js/volt.js"></script>
+<script>
+nav('live.html');
+
+/* Live sessions v1 is an embed shell. The studio flips a session on by
+   editing live-config.json next to this page:
+     { "live": true, "url": "<embed URL>", "title": "...", "platform": "youtube" }
+   For YouTube, use the embed URL (youtube.com/embed/<id>). For X, use the
+   broadcast URL — X sometimes refuses framing, so the open-out link below
+   always rides along. Nothing here talks to the backend. */
+async function loadLive() {
+  const box = document.getElementById('live-box');
+  let cfg = null;
+  try {
+    const r = await fetch('live-config.json', { cache: 'no-store' });
+    if (r.ok) cfg = await r.json();
+  } catch { /* no config — treat as off air */ }
+
+  if (cfg && cfg.live && cfg.url) {
+    box.innerHTML = `
+      <p style="margin-bottom:10px"><span class="live-dot"></span><b>LIVE NOW</b>${cfg.title ? ' — ' + esc(cfg.title) : ''}</p>
+      <div class="live-frame"><iframe src="${esc(cfg.url)}" title="${esc(cfg.title || 'Live studio session')}"
+        allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen referrerpolicy="no-referrer-when-downgrade"></iframe></div>
+      <p class="note" style="margin-top:10px">Player blocked or blank? Some platforms refuse embedding —
+        <a href="${esc(cfg.url)}" target="_blank" rel="noopener" style="color:var(--pur)">open the stream directly</a>.</p>`;
+    return;
+  }
+
+  box.innerHTML = `<div class="card" style="text-align:center;padding:28px 16px">
+    <p style="font-size:18px;margin-bottom:6px"><b>No live session right now.</b></p>
+    <p class="note">The booth is quiet — sessions are announced here first. Meanwhile, this week's chart-topper is on the decks:</p>
+  </div>`;
+  loadFeatured();
+}
+
+async function loadFeatured() {
+  try {
+    const d = await api.topVoted();
+    const top = (d && d.beats && d.beats[0]) || null;
+    if (!top) return;
+    document.getElementById('featured').innerHTML = `<article class="post">
+      <div class="post-head">
+        <img src="${esc(api.artUrl(top))}" alt="">
+        <div>
+          <div class="who"><a href="beat.html?id=${esc(top.id)}" style="color:inherit">${esc(top.title)}</a>${top.isHouse ? ' <span class="house-tag">🏠 House beat</span>' : ''}</div>
+          <div class="sub">${esc(top.genre)}${top.bpm ? ' · ' + esc(top.bpm) + ' BPM' : ''}</div>
+        </div>
+        <span class="badge wait topvoted-badge">Top Voted this week</span>
+      </div>
+      <div class="post-body"><div class="post-actions">
+        <span class="topvoted-votes">▲ ${esc(top.votes?.totalWeight ?? 0)}</span>
+        <a class="btn small" href="beat.html?id=${esc(top.id)}">Open the beat</a>
+      </div></div>
+    </article>`;
+    document.getElementById('featured-wrap').style.display = '';
+  } catch { /* chart unavailable — quiet state stands on its own */ }
+}
+
+loadLive();
+</script>
+</body>
+</html>

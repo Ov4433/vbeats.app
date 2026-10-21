@@ -51,7 +51,8 @@ async function load() {
     const chain = v ? { onChain: v.onChain, configured: v.chainConfigured, owner: v.chainOwner } : null;
     document.getElementById('beat').innerHTML = `
       <div class="page-head"><div><h1>${esc(b.title)}${b.isHouse ? ' <span class="house-tag">🏠 House beat</span>' : ''}</h1>
-        <p>${esc(b.genre)}${b.bpm ? ' · ' + esc(b.bpm) + ' BPM' : ''}${b.duration || b.dur ? ' · ' + fmtDur(b.duration || b.dur) : ''}</p></div>
+        <p>${esc(b.genre)}${b.bpm ? ' · ' + esc(b.bpm) + ' BPM' : ''}${b.duration || b.dur ? ' · ' + fmtDur(b.duration || b.dur) : ''}</p>
+        <p class="note" style="margin-top:4px">by <a id="producer-link" href="creator.html?u=${esc(b.userId)}" style="color:var(--pur)">this producer</a></p></div>
         <div style="text-align:right"><div class="price" style="font-size:24px">$${esc(b.price)}</div>
         <button class="btn small ghost vote-btn${b.votedByMe ? ' voted' : ''}" id="vote-btn" data-vote-id="${esc(b.id || id)}" onclick="toggleVote(this,'${esc(b.id || id)}')" aria-label="Vote for this beat" style="margin-top:8px">▲ <span class="vote-count">${esc(b.votes?.totalWeight ?? 0)}</span></button></div></div>
       <img src="${esc(api.artUrl(b))}" alt="" style="width:100%;border-radius:16px;border:1px solid var(--line)">
@@ -90,6 +91,14 @@ async function load() {
         <img src="assets/mascot-profile.webp" alt="">
         <div class="bubble">🦇 The fingerprint doesn't lie. If it's <b>verified</b>, this is the real audio.</div>
       </div>`;
+    // Fill in the producer's name from their public creator profile.
+    api.publicProfile(b.userId).then(p => {
+      const link = document.getElementById('producer-link');
+      if (link && p && p.username) {
+        link.textContent = p.username;
+        link.href = 'creator.html?u=' + encodeURIComponent(p.username);
+      }
+    }).catch(() => { /* link still works by user id */ });
     // Card-back play tracking: count the play once, report listen time on pause.
     const player = document.getElementById('player');
     if (player) {
