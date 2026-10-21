@@ -29,6 +29,42 @@
     <div class="bubble">🦇 I'm in the booth with you. <b>Hit record</b> — I'll keep the levels honest.</div>
   </div>
 
+  <h2 style="margin:26px 0 8px">Beat Maker</h2>
+  <div class="card">
+    <div class="seq-transport">
+      <button class="btn small" id="seq-play">▶ Play</button>
+      <label class="seq-bpm-label">BPM <input id="seq-bpm" type="number" min="40" max="240" value="95"></label>
+      <button class="btn small ghost" id="seq-clear">Clear</button>
+    </div>
+    <div class="seq-grid" id="seq-grid"></div>
+    <p class="note">Tap steps to write your own pattern — drums, bass, melody, one bar. Or open a session below and let the crew build with you.</p>
+  </div>
+
+  <div class="card cop-card">
+    <div class="cop-head">
+      <div><h2 style="margin-bottom:4px">V Team in the session</h2>
+      <p class="note" style="margin-top:0">Your co-producers. Quiet until you call them — then they put real notes on your grid.</p></div>
+      <button class="btn small" id="cop-toggle">Open the session</button>
+    </div>
+    <div id="cop-body" style="display:none">
+      <div class="cop-actions">
+        <div class="cop-row">
+          <button class="btn small ghost cop-btn bat-volt" id="cop-volt">🦇 Volt — Build me a frame</button>
+          <select id="cop-style" aria-label="Frame style">
+            <option value="boombap">Boom Bap</option>
+            <option value="trap">Trap</option>
+            <option value="house">House</option>
+          </select>
+        </div>
+        <button class="btn small ghost cop-btn bat-bass" id="cop-bass">🦇 Bass — Ride this</button>
+        <button class="btn small ghost cop-btn bat-forte" id="cop-forte">🦇 Forte — Find the space</button>
+        <button class="btn small ghost cop-btn bat-gwei" id="cop-gwei">🦇 Gwei — 5-second test</button>
+        <button class="btn small ghost cop-btn bat-volt" id="cop-strip">🦇 Volt — Strip it back</button>
+      </div>
+      <div id="cop-log"><p class="note">Quiet in here. The crew only speaks when you call them.</p></div>
+    </div>
+  </div>
+
   <h2 style="margin:26px 0 8px">Takes</h2>
   <div id="takes"><p class="note">No takes yet.</p></div>
 
@@ -51,6 +87,9 @@
 <footer class="footer"><div class="footer-bat"><img src="https://raw.githubusercontent.com/Ov4433/vbeats.app/main/web/assets/mascot-profile.webp" alt=""></div>Verified Beats Studio — Volt keeps the receipts.</footer>
 <script src="js/api.js"></script>
 <script src="js/volt.js"></script>
+<script src="js/pattern-logic.js"></script>
+<script src="js/sequencer.js"></script>
+<script src="js/coproducer.js"></script>
 <script>
 nav('studio.html');
 const $ = id => document.getElementById(id);
