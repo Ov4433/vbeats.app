@@ -27,6 +27,7 @@
     boombap: "Frame's up — boom bap at 90. Kick walks, snare cracks where it should. Don't decorate it yet; rap on it first.",
     trap: "Frame's up — trap at 140, half-time snare, hats with roll tails. Space is the instrument. Leave it open.",
     house: "Frame's up — house at 124, four on the floor, hats off the beat. Steady pulse; let the bass do the talking.",
+    drill: "Frame's up — drill at 142. Kick bounces off the grid, the snare waits for the 3. Nervous energy — don't smooth it out.",
   };
 
   $('cop-volt').onclick = () => {
@@ -76,6 +77,55 @@
     };
     say('Gwei', 'bat-gwei', lines[r.verdict]);
   };
+
+  /* Describe-a-beat: plain words in, a real pattern out. The parser is
+     rule-based (pattern-logic.js) — Volt reports exactly what he caught
+     and names the words he didn't know instead of guessing. */
+  function buildFromDescription() {
+    const text = $('cop-desc').value.trim();
+    if (!text) {
+      say('Volt', 'bat-volt', 'Give me words first — a style, a tempo, a feeling. "Dark boom bap, 92, sparse" and I\'ll build it.');
+      return;
+    }
+    const d = L.parseDescribe(text);
+    if (!d.style && !d.bpm && !d.density && !d.mood) {
+      say('Volt', 'bat-volt', "I didn't catch anything I can build from that" +
+        (d.ignored.length ? ' — words I don\'t know: ' + d.ignored.map(w => "'" + w + "'").join(', ') : '') +
+        '. Try a style (boom bap, trap, house, drill), a tempo number, sparse or busy, dark or bright.');
+      return;
+    }
+    const styleKey = d.style || $('cop-style').value;
+    const f = L.buildFrame(styleKey);
+    const p = S.getPattern();
+    p.kick = f.kick; p.snare = f.snare; p.hat = f.hat;
+    p.bpm = d.bpm || f.bpm;
+    if (d.density) p.hat = L.adjustDensity(p, d.density).hat;
+    p.bass = L.rideBassline(p);
+    let moodNote = '';
+    if (d.mood) {
+      const root = d.mood === 'dark' ? L.MELODY_ROOT - 4 : L.MELODY_ROOT + 3;
+      const scale = d.mood === 'dark' ? L.MINOR : L.MAJOR_PENTA;
+      const r = L.findSpace(p, root, scale);
+      if (!r.crowded && r.noteCount) {
+        p.melody = r.melody;
+        moodNote = d.mood === 'dark' ? ', dark melody low in the register' : ', brighter melody riding higher';
+      }
+    }
+    S.setPattern(p);
+    if (d.style) $('cop-style').value = d.style;
+    const bits = [f.name + ' frame at ' + p.bpm, 'Bass rode the kick'];
+    if (d.density === 'sparse') bits.push('kept it sparse');
+    if (d.density === 'busy') bits.push('filled the hats in');
+    let line = 'Heard you: ' + bits.join(', ') + moodNote + '.';
+    if (d.ignored.length) {
+      line += ' Words I didn\'t know: ' + d.ignored.map(w => "'" + w + "'").join(', ') + ' — ignored, not guessed.';
+    }
+    say('Volt', 'bat-volt', line);
+  }
+  $('cop-desc-go').onclick = buildFromDescription;
+  $('cop-desc').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); buildFromDescription(); }
+  });
 
   $('cop-strip').onclick = () => {
     const r = L.stripBack(S.getPattern());
