@@ -19,6 +19,8 @@ model User {
   username     String         @unique
   passwordHash String
   wallet       String?
+  bat          String?
+  solanaAddress String?       @unique
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
   beats        Beat[]

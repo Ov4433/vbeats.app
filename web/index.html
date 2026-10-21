@@ -10,9 +10,12 @@
 <body>
 <nav class="nav" id="nav"></nav>
 
-<main class="wrap">
+<main class="wrap" id="home-main">
+  <!-- Bat-routed home lead (filled by JS when the user has a home bat) -->
+  <div id="home-lead"></div>
+
   <!-- Stories row: quick moves, app-style -->
-  <div class="stories">
+  <div class="stories" id="sec-stories">
     <a class="story rec" href="studio.html">
       <span class="ring"><span class="glyph">⏺</span></span><span>You · Record</span>
     </a>
@@ -21,6 +24,9 @@
     </a>
     <a class="story" href="claim.html">
       <span class="ring"><span class="glyph">🎟️</span></span><span>Volt Pass</span>
+    </a>
+    <a class="story" href="live.html">
+      <span class="ring"><span class="glyph">🎙️</span></span><span>Live</span>
     </a>
     <a class="story" href="marketplace.html">
       <span class="ring"><span class="glyph">🧭</span></span><span>Explore</span>
@@ -33,7 +39,7 @@
     </a>
   </div>
 
-  <div class="hero-mascot" style="margin:6px 0 4px">
+  <div class="hero-mascot" id="sec-hero" style="margin:6px 0 4px">
     <div class="bubble">🦇 <b>Welcome to the studio.</b> <span style="color:var(--mut);font-size:14px">Every beat in this feed is fingerprinted &amp; verified on-chain. Volt keeps the receipts.</span></div>
   </div>
 
@@ -57,6 +63,64 @@
 <script src="js/volt.js"></script>
 <script>
 nav('index.html');
+
+/* ---- Bat → home routing -------------------------------------------------
+   A signed-in user's home bat leads the homepage with their lane. Only the
+   ORDER of existing blocks changes (lead tiles reuse the quick-move links;
+   the chart and the feed swap places for some lanes) — nothing is hidden
+   from anyone. No bat / signed out → the default order, untouched. */
+const LEAD_TILES = {
+  volt:  [['studio.html', '⏺', 'Open the studio', 'Beat maker & booth'],
+          ['upload.html', '⬆', 'Upload a beat', 'Publish to the feed']],
+  forte: [['studio.html', '⏺', 'Vocal booth', 'Record a take'],
+          ['marketplace.html', '🧭', 'Beats to rap on', 'Explore the vault']],
+  bass:  [['cards.html', '🃏', 'Beat cards', 'Verified drops'],
+          ['marketplace.html', '🧭', 'Explore', 'Charts & on-chain drops']],
+  gwei:  [['marketplace.html', '🧭', 'Marketplace', 'Exclusives, staking, vaults'],
+          ['cards.html', '🃏', 'Cards', 'Your collection & vaults']],
+};
+// Lanes whose chart (Top Voted rail) should lead over the feed. Default DOM
+// order is already chart-then-feed; the Artist lane flips it so the beats
+// themselves lead.
+const FEED_FIRST = { forte: true };
+
+function applyHome(batId) {
+  const main = document.getElementById('home-main');
+  const lead = document.getElementById('home-lead');
+  const chart = document.getElementById('topvoted-section');
+  const feed = document.querySelector('.feed');
+  const b = batById(batId);
+  if (!b) { lead.innerHTML = ''; return; }
+  if (FEED_FIRST[b.id]) main.insertBefore(feed, chart);
+  else main.insertBefore(chart, feed);
+  const welcomed = sessionStorage.getItem('vbeats_home_welcomed') === '1';
+  lead.innerHTML = `<div class="home-lead" style="border-color:${b.color}">
+    ${welcomed ? '' : `<div class="lead-welcome">
+      <span class="bat-dot" style="background:${b.color}">${b.name[0]}</span>
+      <p><span style="color:${b.color};font-weight:800">${b.name}</span> · ${esc(b.job)} — your ${esc(b.home)} home guide.<br>${esc(b.welcome)}</p>
+      <button class="lead-x" id="lead-x" aria-label="Dismiss">×</button>
+    </div>`}
+    <div class="lead-tiles">${LEAD_TILES[b.id].map(([href, glyph, t, s]) =>
+      `<a class="lead-tile" href="${href}"><span class="glyph">${glyph}</span><span>${t}<small>${s}</small></span></a>`).join('')}
+    </div></div>`;
+  const x = document.getElementById('lead-x');
+  if (x) x.onclick = () => {
+    sessionStorage.setItem('vbeats_home_welcomed', '1');
+    applyHome(b.id);
+  };
+}
+
+if (api.bat) applyHome(api.bat);
+if (api.loggedIn()) {
+  api.profile().then(p => {
+    if (p && p.bat) {
+      if (p.bat !== api.bat) { api.bat = p.bat; applyHome(p.bat); }
+    } else if (api.bat) {
+      // Device picked a bat while signed out — adopt it into the account.
+      api.updateProfile({ bat: api.bat }).catch(() => {});
+    }
+  }).catch(() => { /* local mirror already applied */ });
+}
 
 let allBeats = [];
 let feedMode = 'following';
@@ -142,6 +206,7 @@ function post(b) {
         <button class="play-btn" data-id="${esc(b.id)}" onclick="togglePlay(this,'${esc(b.id)}','${esc(api.mediaUrl(b))}')">▶</button>
         <button class="btn small ghost vote-btn${b.votedByMe ? ' voted' : ''}" data-vote-id="${esc(b.id)}" onclick="toggleVote(this,'${esc(b.id)}')" aria-label="Vote for this beat">▲ <span class="vote-count">${esc(b.votes?.totalWeight ?? 0)}</span></button>
         <span class="price">$${esc(b.price)}</span>
+        <a class="btn small ghost" href="creator.html?u=${esc(b.userId)}">Producer</a>
         <a class="btn small" href="beat.html?id=${esc(b.id)}">Lease / Mint</a>
         <a class="btn small ghost" href="beat.html?id=${esc(b.id)}">Make offer</a>
         <a class="btn small ghost" href="studio.html">Remix</a>

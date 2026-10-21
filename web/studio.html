@@ -36,6 +36,12 @@
     </div>
   </div>
 
+  <p class="note" style="margin-top:12px">🎙️ <a href="live.html" style="color:var(--pur)">Live studio sessions</a> — catch the crew live in the booth, or see this week's Top Voted #1.</p>
+
+  <div class="card" style="margin-top:18px">
+    <div class="daily-line" id="daily-line"></div>
+  </div>
+
   <div class="card cop-card">
     <div class="cop-head">
       <div><h2 style="margin-bottom:4px">V Team in the session</h2>
@@ -109,11 +115,24 @@
 <script src="js/api.js"></script>
 <script src="js/volt.js"></script>
 <script src="js/pattern-logic.js"></script>
+<script src="js/daily-lines.js"></script>
 <script src="js/sequencer.js"></script>
 <script src="js/coproducer.js"></script>
 <script>
 nav('studio.html');
 const $ = id => document.getElementById(id);
+
+/* Daily V Team line — one quiet line a day from the crew, same for
+   everyone, picked by the date (see js/daily-lines.js). */
+(function () {
+  const box = $('daily-line');
+  if (!box || !window.DailyLines) return;
+  const line = DailyLines.dailyLine(new Date());
+  const bat = batById(line.bat) || batById('volt');
+  box.innerHTML = '<span class="bat-dot" style="background:' + bat.color + '">' + bat.name[0] + '</span>' +
+    '<p><span class="daily-who" style="color:' + bat.color + '">' + bat.name + '</span> ' +
+    '<span class="note">· ' + esc(bat.job) + ' · today\u2019s line</span><br>' + esc(line.text) + '</p>';
+})();
 let mediaRec = null, stream = null, analyser = null, audioCtx = null;
 let chunks = [], startTs = 0, tick = null, meterRaf = null;
 let selectedTake = null, takeN = 0;

@@ -22,6 +22,11 @@
   </div>
 
   <div class="card" style="margin:18px 0">
+    <h3 style="margin-bottom:10px">🟣 Link Solana / dev.fun wallet</h3>
+    <div id="solana-box"><p class="note">Checking…</p></div>
+  </div>
+
+  <div class="card" style="margin:18px 0">
     <h3 style="margin-bottom:10px">Volt Founding Producer Pass</h3>
     <div id="pass-box"><p class="note">Connect a wallet to see your pass.</p></div>
   </div>
@@ -29,6 +34,18 @@
   <div class="card" style="margin:18px 0">
     <h3 style="margin-bottom:10px">Account</h3>
     <div id="account-box"><p class="note">Checking…</p></div>
+  </div>
+
+  <div class="card" style="margin:18px 0">
+    <h3 style="margin-bottom:10px">🌐 Public creator page</h3>
+    <div id="public-box"><p class="note">Sign in to get your shareable creator page.</p></div>
+  </div>
+
+  <div class="card" style="margin:18px 0">
+    <h3 style="margin-bottom:6px">🦇 Your bat — your home</h3>
+    <p class="note">Pick a bat and the homepage leads with their lane. They keep both jobs — the original crew role and the home they guide. Change it any time; nothing is locked.</p>
+    <div id="bat-box"><p class="note">Loading…</p></div>
+    <p class="note" id="bat-note" style="margin-top:10px"></p>
   </div>
 
   <div class="card" id="uploads-card" style="margin:18px 0 50px;display:none">
@@ -61,6 +78,9 @@ function renderProfile() {
        <a class="btn ghost small" href="upload.html">Sign in</a>`;
 
   if (w) loadPass(w);
+  loadSolana();
+  loadPublicLink();
+  loadBat();
   loadUploads();
 }
 
@@ -70,6 +90,142 @@ async function connect() {
 }
 function disconnect() {
   api.disconnectWallet(); renderProfile(); renderUser();
+}
+
+/* Minimal base58 encoder (Bitcoin/Solana alphabet) for signature bytes —
+   Phantom returns raw bytes; the API takes base58. */
+function bs58Encode(bytes) {
+  const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+  if (!bytes.length) return '';
+  let zeros = 0;
+  while (zeros < bytes.length && bytes[zeros] === 0) zeros++;
+  const digits = [0];
+  for (let i = zeros; i < bytes.length; i++) {
+    let carry = bytes[i];
+    for (let j = 0; j < digits.length; j++) {
+      carry += digits[j] << 8;
+      digits[j] = carry % 58;
+      carry = (carry / 58) | 0;
+    }
+    while (carry) { digits.push(carry % 58); carry = (carry / 58) | 0; }
+  }
+  let out = '1'.repeat(zeros);
+  for (let i = digits.length - 1; i >= 0; i--) out += ALPHABET[digits[i]];
+  return out;
+}
+
+function solanaProvider() {
+  const sol = (window.phantom && window.phantom.solana) || window.solana || null;
+  return sol && typeof sol.signMessage === 'function' ? sol : null;
+}
+
+async function loadSolana() {
+  const box = document.getElementById('solana-box');
+  if (!api.loggedIn()) {
+    box.innerHTML = '<p class="note">Sign in to link a Solana wallet to your account.</p>';
+    return;
+  }
+  let p = null;
+  try { p = await api.profile(); window._vbProfile = p; } catch { /* handled below */ }
+  if (!p) { box.innerHTML = '<p class="note">Profile service is waking up — refresh in a few seconds.</p>'; return; }
+
+  if (p.solanaAddress) {
+    box.innerHTML = solanaCreationsHtml(p.solanaAddress) +
+      '<p style="margin-top:12px"><button class="btn ghost small" onclick="doUnlinkSolana()">Unlink wallet</button></p>';
+    return;
+  }
+  const provider = solanaProvider();
+  if (provider) {
+    box.innerHTML = `<p class="note" style="margin-bottom:12px">Link the Solana wallet behind your dev.fun work. You'll sign one message — no transaction, no SOL moves, and your keys never leave Phantom.</p>
+      <button class="btn small" onclick="doLinkSolana()">Connect Phantom &amp; sign to link</button>
+      <span class="note" id="solana-note"></span>`;
+  } else {
+    box.innerHTML = `<p class="note">No Phantom wallet detected in this browser, so linking is paused — there's nothing to sign with here.</p>
+      <p class="note" style="margin-top:8px">To link: open this page in the Phantom in-app browser, or on a desktop with the Phantom extension, and this card becomes a one-tap sign. Once linked, your dev.fun creations (rubin.beats + the ViBe token) show on your profile and your public creator page.</p>`;
+  }
+}
+
+async function doLinkSolana() {
+  const note = document.getElementById('solana-note');
+  try {
+    const provider = solanaProvider();
+    if (!provider) throw new Error('Phantom not detected');
+    if (note) note.textContent = ' Connecting…';
+    const resp = await provider.connect();
+    const address = String((resp && resp.publicKey) || provider.publicKey);
+    const p = window._vbProfile || await api.profile();
+    // Must match the backend's buildLinkMessage exactly.
+    const message = 'Link this Solana wallet to VBeats account ' + p.id;
+    if (note) note.textContent = ' Sign the message in Phantom…';
+    const signed = await provider.signMessage(new TextEncoder().encode(message), 'utf8');
+    const sigBytes = (signed && signed.signature) || signed;
+    const signature = bs58Encode(new Uint8Array(sigBytes));
+    await api.post('/v1/users/link-solana', { address, signature, message });
+    loadSolana();
+  } catch (e) {
+    if (note) note.textContent = ' ' + (e.message || 'Link failed.');
+  }
+}
+
+async function doUnlinkSolana() {
+  try { await api.post('/v1/users/unlink-solana', {}); } catch { /* re-render shows truth */ }
+  loadSolana();
+}
+
+async function loadPublicLink() {
+  const box = document.getElementById('public-box');
+  if (!api.loggedIn()) return;
+  try {
+    const p = await api.profile();
+    if (!p || !p.username) { box.innerHTML = '<p class="note">Could not load your account — refresh in a few seconds.</p>'; return; }
+    window._vbUsername = p.username;
+    const url = location.origin + location.pathname.replace(/[^/]*$/, '') + 'creator.html?u=' + encodeURIComponent(p.username);
+    box.innerHTML = `<p style="margin-bottom:10px"><a href="creator.html?u=${esc(p.username)}"><b>creator.html?u=${esc(p.username)}</b></a></p>
+      <a class="btn small" href="creator.html?u=${esc(p.username)}">View my public page</a>
+      <button class="btn ghost small" id="copy-creator">Copy link</button>
+      <span class="note" id="copy-note"></span>`;
+    document.getElementById('copy-creator').onclick = async () => {
+      const note = document.getElementById('copy-note');
+      try { await navigator.clipboard.writeText(url); note.textContent = ' Copied.'; }
+      catch { note.textContent = ' Copy failed — long-press the link instead.'; }
+    };
+  } catch { box.innerHTML = '<p class="note">Profile service is waking up — refresh in a few seconds.</p>'; }
+}
+
+async function loadBat() {
+  const box = document.getElementById('bat-box');
+  const note = document.getElementById('bat-note');
+  let selected = api.bat || '';
+  const paint = () => wireBatPicker(box, selected, async (id) => {
+    selected = id;
+    api.bat = id;
+    const b = batById(id);
+    note.textContent = b ? `${b.name} is your home bat now — ${b.home} home leads.` : '';
+    if (api.loggedIn()) {
+      try {
+        const p = await api.updateProfile({ bat: id });
+        if (p && p.bat) { selected = p.bat; api.bat = p.bat; paint(); }
+        note.textContent = `${b.name} saved to your account — ${b.home} home will lead on any device.`;
+      } catch { note.textContent = 'Saved on this device — account sync will catch up next visit.'; }
+    }
+  });
+  paint();
+  if (api.loggedIn()) {
+    try {
+      const p = await api.profile();
+      if (p && p.bat) {
+        selected = p.bat;
+        api.bat = p.bat;
+        paint();
+        const b = batById(p.bat);
+        if (b) note.textContent = `Home bat: ${b.name} — ${b.job} by trade, ${b.home} home guide.`;
+      } else if (!selected) {
+        note.textContent = 'No home bat yet — pick one and the homepage becomes theirs.';
+      }
+    } catch { /* local mirror still applies */ }
+  } else if (!selected) {
+    note.textContent = 'Saved on this device. Sign in and it follows your account.';
+  }
 }
 
 async function loadPass(w) {

@@ -42,9 +42,19 @@ export const beatCreateSchema = z.object({
 
 export const beatUpdateSchema = beatCreateSchema.partial();
 
+export const BATS = ['volt', 'forte', 'bass', 'gwei'] as const;
+export type Bat = (typeof BATS)[number];
+
 export const profileUpdateSchema = z.object({
   username: z.string().min(2).max(64).optional(),
   wallet: z.string().max(128).nullable().optional(),
+  bat: z.enum(BATS).nullable().optional(),
+});
+
+export const linkSolanaSchema = z.object({
+  address: z.string().min(32).max(64),
+  signature: z.string().min(32).max(128),
+  message: z.string().min(1).max(300),
 });
 
 export const paginationSchema = z.object({

@@ -86,6 +86,20 @@ const api = {
       body: JSON.stringify(body),
     });
   },
+  put(path, body) {
+    return this.req(path, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  },
+  profile() { return this.get('/v1/users/profile'); },
+  updateProfile(body) { return this.put('/v1/users/profile', body); },
+  publicProfile(u) { return this.get('/v1/users/' + encodeURIComponent(u) + '/public'); },
+
+  // --- Home bat (persisted on the profile; mirrored locally for instant render) ---
+  get bat() { return localStorage.getItem('vbeats_bat') || ''; },
+  set bat(b) { b ? localStorage.setItem('vbeats_bat', b) : localStorage.removeItem('vbeats_bat'); },
   postForm(path, formData) {
     return this.req(path, { method: 'POST', body: formData });
   },
@@ -214,10 +228,66 @@ const api = {
   },
 };
 
+/* The V Team — both job layers, always: the original crew job and the
+   home lane from the bat pick. Colors match the claim page picker. */
+const VB_BATS = [
+  { id: 'volt',  name: 'Volt',  color: '#c77dff', home: 'Producer', job: 'Onchain Producer',
+    homeBlurb: 'Beat maker first. The studio is home.',
+    welcome: 'Your studio\u2019s up top.' },
+  { id: 'forte', name: 'Forte', color: '#ffd166', home: 'Artist', job: 'OG Whale',
+    homeBlurb: 'Vocal booth first. Beats to rap on.',
+    welcome: 'Booth\u2019s up top \u2014 beats ready when you are.' },
+  { id: 'bass',  name: 'Bass',  color: '#6ec1ff', home: 'Onchain', job: 'Core Dev',
+    homeBlurb: 'Verified drops, charts, onchain first.',
+    welcome: 'Verified drops up top. Receipts checked.' },
+  { id: 'gwei',  name: 'Gwei',  color: '#7dff8a', home: 'Trader', job: 'Retail Trader',
+    homeBlurb: 'Marketplace first. Exclusives, staking, vaults.',
+    welcome: 'Market\u2019s up top. Move fast.' },
+];
+function batById(id) { return VB_BATS.find(b => b.id === id) || null; }
+
+/* Bat picker — same UI as the claim page (.bat-grid / .bat-pick), showing
+   BOTH job titles. onPick(batId) fires on tap; selection is re-rendered
+   by the caller or via wireBatPicker's internal state. */
+function batPickerHtml(selected) {
+  return '<div class="bat-grid">' + VB_BATS.map(b =>
+    '<button type="button" class="bat-pick' + (selected === b.id ? ' on' : '') + '" data-bat="' + b.id + '">' +
+    '<span class="bat-dot" style="background:' + b.color + '">' + b.name[0] + '</span><br>' +
+    '<b>' + b.name + '</b> · ' + b.home + ' home<br>' +
+    '<span class="note">' + b.job + ' \u00b7 ' + b.homeBlurb + '</span></button>'
+  ).join('') + '</div>';
+}
+function wireBatPicker(box, selected, onPick) {
+  box.innerHTML = batPickerHtml(selected);
+  box.querySelectorAll('.bat-pick').forEach(el => {
+    el.onclick = () => {
+      box.querySelectorAll('.bat-pick').forEach(x => x.classList.toggle('on', x === el));
+      onPick(el.dataset.bat);
+    };
+  });
+}
+
+/* Solana creations — known, static data for a linked dev.fun wallet
+   (rubin.beats + its ViBe token). Built from the wallet-link signature
+   proof + known IDs only; dev.fun profile pages are never scraped. */
+const VB_DEVFUN_APP_URL = 'https://dev.fun/p/a4d1042f917493dc7d04';
+const VB_VIBE_MINT = 'ENQpuwEztYuLRvLJdaB9awNrMGH83Njnik4CmPepump';
+function solanaCreationsHtml(address) {
+  const short = address.slice(0, 4) + '\u2026' + address.slice(-4);
+  return '<div style="display:flex;flex-direction:column;gap:10px">' +
+    '<p class="note">Linked Solana wallet: <span class="mono">' + esc(address) + '</span></p>' +
+    '<p>\u{1F3B9} <a href="' + VB_DEVFUN_APP_URL + '" target="_blank" rel="noopener"><b>rubin.beats</b></a>' +
+    ' <span class="note">\u2014 a beat-maker built on dev.fun by this wallet (' + esc(short) + ')</span></p>' +
+    '<p><span class="solana-chip">ViBe \u00b7 ' + esc(VB_VIBE_MINT.slice(0, 6)) + '\u2026' + esc(VB_VIBE_MINT.slice(-4)) + '</span> ' +
+    '<a class="btn small ghost" href="https://pump.fun/coin/' + VB_VIBE_MINT + '" target="_blank" rel="noopener">View token</a> ' +
+    '<a class="btn small ghost" href="https://dev.fun/user/' + encodeURIComponent(address) + '" target="_blank" rel="noopener">dev.fun profile</a></p>' +
+    '</div>';
+}
+
 function nav(active) {
   const links = [
     ['index.html', 'Home'], ['marketplace.html', 'Explore'],
-    ['studio.html', 'Studio'], ['chat.html', 'Chat'], ['upload.html', 'Upload'],
+    ['studio.html', 'Studio'], ['live.html', 'Live'], ['chat.html', 'Chat'], ['upload.html', 'Upload'],
     ['claim.html', 'Volt Pass'], ['deploy.html', 'Console'],
   ];
   const el = document.getElementById('nav');
@@ -244,6 +314,7 @@ function tabbar(active) {
     'cards.html': 'cards.html',
     'beat.html': 'cards.html',
     'profile.html': 'profile.html',
+    'creator.html': 'profile.html',
   }[active] || '';
   const ico = {
     home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9.5 21v-6h5v6"/></svg>',

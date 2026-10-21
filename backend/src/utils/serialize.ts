@@ -5,6 +5,8 @@ export interface SerializedUser {
   email: string;
   username: string;
   wallet: string | null;
+  bat: string | null;
+  solanaAddress: string | null;
   createdAt: string;
 }
 
@@ -18,6 +20,8 @@ export function serializeUser(user: User): SerializedUser {
     email: user.email,
     username: user.username,
     wallet: user.wallet,
+    bat: user.bat ?? null,
+    solanaAddress: user.solanaAddress ?? null,
     createdAt: user.createdAt.toISOString(),
   };
 }

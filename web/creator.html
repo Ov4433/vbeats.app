@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Creator — Verified Beats Studio</title>
+<link rel="icon" href="assets/logo.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<nav class="nav" id="nav"></nav>
+
+<main class="wrap" style="max-width:720px">
+  <div id="err"></div>
+  <div id="creator-head" style="padding:26px 0 6px"><p class="note">Loading creator…</p></div>
+
+  <div class="card" style="margin:18px 0">
+    <div class="creator-totals" id="creator-totals"></div>
+  </div>
+
+  <div id="creator-solana"></div>
+
+  <h2 style="margin:26px 0 8px">Beats</h2>
+  <div id="creator-beats"><p class="note">Loading…</p></div>
+</main>
+
+<footer class="footer"><div class="footer-bat"><img src="assets/mascot-profile.webp" alt=""></div>Verified Beats Studio — Volt keeps the receipts.</footer>
+
+<script src="js/api.js"></script>
+<script src="js/volt.js"></script>
+<script>
+nav('creator.html');
+
+const u = new URLSearchParams(location.search).get('u') || '';
+
+async function toggleVote(btn, id) {
+  if (!api.loggedIn()) {
+    if (confirm('Sign in to vote — head to the sign-in page?')) location.href = 'upload.html';
+    return;
+  }
+  try {
+    btn.disabled = true;
+    const r = await api.vote(id);
+    const count = btn.querySelector('.vote-count');
+    if (count) count.textContent = r.totalWeight;
+    btn.classList.toggle('voted', !!r.voted);
+  } catch (e) { alert(e.message || e); }
+  finally { btn.disabled = false; }
+}
+
+function beatRow(b) {
+  return `<article class="post" style="margin-bottom:14px">
+    <div class="post-head">
+      <img src="${esc(api.artUrl(b))}" alt="">
+      <div>
+        <div class="who"><a href="beat.html?id=${esc(b.id)}" style="color:inherit">${esc(b.title)}</a>${b.isHouse ? ' <span class="house-tag">🏠 House beat</span>' : ''}</div>
+        <div class="sub">${esc(b.genre)}${b.bpm ? ' · ' + esc(b.bpm) + ' BPM' : ''}${b.duration || b.dur ? ' · ' + fmtDur(b.duration || b.dur) : ''}</div>
+      </div>
+      <span class="chip">✓ VERIFIED ON-CHAIN</span>
+    </div>
+    <div class="post-body"><div class="post-actions">
+      <button class="btn small ghost vote-btn${b.votedByMe ? ' voted' : ''}" onclick="toggleVote(this,'${esc(b.id)}')" aria-label="Vote for this beat">▲ <span class="vote-count">${esc(b.votes?.totalWeight ?? 0)}</span></button>
+      <span class="price">$${esc(b.price)}</span>
+      <a class="btn small" href="beat.html?id=${esc(b.id)}">Lease / Mint</a>
+    </div></div>
+  </article>`;
+}
+
+async function load() {
+  if (!u) { showErr('err', 'No creator given — open this page from a beat or a profile.'); return; }
+  try {
+    const p = await api.publicProfile(u);
+    const bat = p.bat ? batById(p.bat) : null;
+    document.title = p.username + ' — Verified Beats Studio';
+    document.getElementById('creator-head').innerHTML = `
+      <h1 style="font-size:30px;margin-bottom:6px">${esc(p.username)}</h1>
+      <p class="note">${p.memberNumber ? '🎟️ Founding Producer · Member #' + esc(p.memberNumber) + ' · ' : ''}In the studio since ${esc(new Date(p.createdAt).getFullYear())}</p>
+      ${bat ? `<p style="margin-top:10px"><span class="bat-dot" style="background:${bat.color};width:30px;height:30px;font-size:14px;margin-bottom:0;vertical-align:middle">${bat.name[0]}</span>
+        <b style="color:${bat.color}">${bat.name}</b> <span class="note">· ${esc(bat.job)} · guides the ${esc(bat.home)} home</span></p>` : ''}`;
+    const t = p.totals || { beats: 0, plays: 0, votesReceived: 0, voteCount: 0 };
+    document.getElementById('creator-totals').innerHTML = `
+      <div><div class="num">${esc(t.beats)}</div><div class="note">Beats</div></div>
+      <div><div class="num">${esc(t.plays)}</div><div class="note">Plays</div></div>
+      <div><div class="num">${esc(t.votesReceived)}</div><div class="note">Vote weight received</div></div>
+      <div><div class="num">${esc(t.voteCount)}</div><div class="note">Votes</div></div>`;
+    if (p.solanaAddress) {
+      document.getElementById('creator-solana').innerHTML =
+        '<div class="card" style="margin:18px 0"><h3 style="margin-bottom:10px">🟣 Solana creations</h3>' +
+        solanaCreationsHtml(p.solanaAddress) + '</div>';
+    }
+    const beats = p.beats || [];
+    document.getElementById('creator-beats').innerHTML = beats.length
+      ? beats.map(beatRow).join('')
+      : '<p class="note">No beats yet.</p>';
+  } catch (e) {
+    showErr('err', e.message || 'Creator not found.');
+    document.getElementById('creator-head').innerHTML = '';
+    document.getElementById('creator-beats').innerHTML = '';
+  }
+}
+load();
+</script>
+</body>
+</html>
