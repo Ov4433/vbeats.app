@@ -353,3 +353,22 @@ body.has-tabbar { padding-bottom: 88px; }
 .nft-card .nc-row { display: flex; align-items: center; justify-content: space-between; }
 .nft-card .nc-price { font-weight: 800; }
 .nft-card .chip { margin-left: 0; }
+
+/* voting */
+.vote-btn { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.vote-btn.voted { background: var(--pur); border-color: var(--pur); color: #fff; }
+.house-tag { display: inline-block; font-size: 11px; font-weight: 700; color: var(--gold);
+  background: var(--panel2); border: 1px solid var(--line); border-radius: 999px;
+  padding: 2px 8px; vertical-align: middle; white-space: nowrap; }
+.topvoted { max-width: 620px; margin: 14px auto 6px; background: var(--panel);
+  border: 1px solid var(--line); border-radius: var(--rad); padding: 14px; }
+.topvoted-head { font-size: 17px; margin-bottom: 6px; }
+.topvoted-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 8px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.topvoted-row:first-child { border-top: none; }
+.topvoted-rank { font-weight: 800; color: var(--mut); min-width: 28px; }
+.topvoted-title { font-weight: 700; flex: 1 1 auto; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.topvoted-genre { color: var(--mut); font-size: 12.5px; white-space: nowrap; }
+.topvoted-votes { font-weight: 800; color: var(--pur); white-space: nowrap; margin-left: auto; }
+.topvoted-badge { white-space: nowrap; }

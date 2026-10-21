@@ -26,6 +26,21 @@ const id = new URLSearchParams(location.search).get('id');
 let currentBeat = null;
 let currentOffers = [];
 
+async function toggleVote(btn, beatId) {
+  if (!api.loggedIn()) {
+    if (confirm('Sign in to vote — head to the sign-in page?')) location.href = 'upload.html';
+    return;
+  }
+  try {
+    btn.disabled = true;
+    const r = await api.vote(beatId);
+    const count = btn.querySelector('.vote-count');
+    if (count) count.textContent = r.totalWeight;
+    btn.classList.toggle('voted', !!r.voted);
+  } catch (e) { alert(e.message || e); }
+  finally { btn.disabled = false; }
+}
+
 async function load() {
   if (!id) { showErr('err', 'No beat id given.'); return; }
   try {
@@ -35,9 +50,10 @@ async function load() {
     // verify returns a flat shape: { verified, fingerprint, onChain, chainConfigured, chainOwner? }
     const chain = v ? { onChain: v.onChain, configured: v.chainConfigured, owner: v.chainOwner } : null;
     document.getElementById('beat').innerHTML = `
-      <div class="page-head"><div><h1>${esc(b.title)}</h1>
+      <div class="page-head"><div><h1>${esc(b.title)}${b.isHouse ? ' <span class="house-tag">🏠 House beat</span>' : ''}</h1>
         <p>${esc(b.genre)}${b.bpm ? ' · ' + esc(b.bpm) + ' BPM' : ''}${b.duration || b.dur ? ' · ' + fmtDur(b.duration || b.dur) : ''}</p></div>
-        <div class="price" style="font-size:24px">$${esc(b.price)}</div></div>
+        <div style="text-align:right"><div class="price" style="font-size:24px">$${esc(b.price)}</div>
+        <button class="btn small ghost vote-btn${b.votedByMe ? ' voted' : ''}" id="vote-btn" data-vote-id="${esc(b.id || id)}" onclick="toggleVote(this,'${esc(b.id || id)}')" aria-label="Vote for this beat" style="margin-top:8px">▲ <span class="vote-count">${esc(b.votes?.totalWeight ?? 0)}</span></button></div></div>
       <img src="${esc(api.artUrl(b))}" alt="" style="width:100%;border-radius:16px;border:1px solid var(--line)">
       <audio class="wide" id="player" controls src="${esc(api.mediaUrl(b))}"></audio>
       ${b.description || b.desc ? `<div class="card" style="margin-top:16px"><p>${esc(b.description || b.desc)}</p></div>` : ''}
