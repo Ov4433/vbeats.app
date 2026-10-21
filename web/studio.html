@@ -38,6 +38,19 @@
     </div>
     <div class="seq-grid" id="seq-grid"></div>
     <p class="note">Tap steps to write your own pattern — drums, bass, melody, one bar. Or open a session below and let the crew build with you.</p>
+    <div class="seq-pub">
+      <div id="seq-pub-err"></div>
+      <div class="field"><label>Title</label><input id="s-title" placeholder="Pattern Sketch"></div>
+      <div class="row2">
+        <div class="field"><label>Genre</label>
+          <select id="s-genre"><option>Trap</option><option>Hip-Hop</option><option>R&amp;B</option><option>Pop</option><option>Drill</option><option>Afrobeats</option><option>EDM</option><option>Other</option></select>
+        </div>
+        <div class="field"><label>Price (USD)</label><input id="s-price" type="number" min="0" step="0.01" value="9.99"></div>
+      </div>
+      <button class="btn" id="seq-pub-go" style="width:100%">Publish this pattern</button>
+      <p class="note">Renders your bar looped ×4 to audio and publishes it the same way as a take. You need to be signed in — <a href="upload.html" style="color:var(--pur)">sign in here</a>.</p>
+      <div id="seq-pub-done"></div>
+    </div>
   </div>
 
   <div class="card cop-card">
@@ -54,6 +67,7 @@
             <option value="boombap">Boom Bap</option>
             <option value="trap">Trap</option>
             <option value="house">House</option>
+            <option value="drill">Drill</option>
           </select>
         </div>
         <button class="btn small ghost cop-btn bat-bass" id="cop-bass">🦇 Bass — Ride this</button>
@@ -61,6 +75,11 @@
         <button class="btn small ghost cop-btn bat-gwei" id="cop-gwei">🦇 Gwei — 5-second test</button>
         <button class="btn small ghost cop-btn bat-volt" id="cop-strip">🦇 Volt — Strip it back</button>
       </div>
+      <div class="cop-describe">
+        <input id="cop-desc" type="text" placeholder='Describe a beat — "dark boom bap, 92, sparse"' aria-label="Describe a beat">
+        <button class="btn small ghost cop-btn bat-volt" id="cop-desc-go">🦇 Volt — Build it</button>
+      </div>
+      <p class="note" style="margin-top:0">Volt reads plain words: a style (boom bap, trap, house, drill), a tempo number, sparse or busy, dark or bright. Anything else, he'll admit he doesn't know it.</p>
       <div id="cop-log"><p class="note">Quiet in here. The crew only speaks when you call them.</p></div>
     </div>
   </div>
@@ -186,6 +205,40 @@ $('pub-go').onclick = async () => {
       <p class="note"><a href="beat.html?id=${esc(beat.id)}" style="color:var(--pur)">View your beat →</a></p>`;
   } catch (e) { showErr('pub-err', e.message); Volt.help("That publish didn't go through. Check you're signed in and the take actually recorded, then try again."); }
   finally { $('pub-go').disabled = false; $('pub-go').textContent = 'Publish to marketplace'; }
+};
+
+/* Publish the sequencer pattern — same upload path as a take (api.upload),
+   same fields, same sign-in behavior. The bar is rendered to WAV offline
+   (looped ×4) by StudioSeq.renderWav using the sequencer's own voices. */
+$('seq-pub-go').onclick = async () => {
+  try {
+    if (!api.loggedIn()) throw new Error('Sign in first — open the Upload page to sign in, then come back.');
+    const p = StudioSeq.getPattern();
+    if (!PatternLogic.countHits(p)) throw new Error('Your pattern is empty — tap some steps, or open a session and let the crew build one.');
+    const title = $('s-title').value.trim();
+    if (!title) throw new Error('Title is required.');
+    const price = parseFloat($('s-price').value);
+    if (!(price >= 0)) throw new Error('Price must be a non-negative number.');
+    $('seq-pub-go').disabled = true; $('seq-pub-go').textContent = 'Rendering & publishing…';
+    const blob = await StudioSeq.renderWav(4);
+    const file = new File([blob], 'pattern.wav', { type: 'audio/wav' });
+    const fd = new FormData();
+    fd.append('audio', file);
+    fd.append('title', title);
+    fd.append('genre', $('s-genre').value);
+    fd.append('price', String(price));
+    fd.append('dur', String(Math.round(PatternLogic.patternDurationSec(p.bpm, 4))));
+    fd.append('bpm', String(p.bpm));
+    if (api.wallet) fd.append('producerAddress', api.wallet);
+    // The backend ignores unknown fields, so the pattern rides along for the
+    // record; a local copy keyed by title is what makes it recoverable here.
+    fd.append('pattern', JSON.stringify(p));
+    const beat = await api.upload(fd);
+    try { localStorage.setItem('vbeats_pattern:' + title, JSON.stringify(p)); } catch { /* storage unavailable */ }
+    $('seq-pub-done').innerHTML = `<div class="badge ok" style="margin-top:14px">✓ Published &amp; fingerprinted</div>
+      <p class="note"><a href="beat.html?id=${esc(beat.id)}" style="color:var(--pur)">View your beat →</a></p>`;
+  } catch (e) { showErr('seq-pub-err', e.message); Volt.help("That pattern publish didn't go through. Check you're signed in and the pattern has notes in it, then try again."); }
+  finally { $('seq-pub-go').disabled = false; $('seq-pub-go').textContent = 'Publish this pattern'; }
 };
 </script>
 </body>

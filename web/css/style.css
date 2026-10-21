@@ -330,6 +330,14 @@ body.has-tabbar { padding-bottom: 88px; }
 .cop-line.bat-forte { border-left-color: var(--gold); } .cop-line.bat-forte b { color: var(--gold); }
 .cop-line.bat-gwei { border-left-color: var(--grn); } .cop-line.bat-gwei b { color: var(--grn); }
 
+/* --- publish from the sequencer --- */
+.seq-pub { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 6px; }
+
+/* --- describe-a-beat (inside the co-producer panel) --- */
+.cop-describe { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0 6px; }
+.cop-describe input { flex: 1; min-width: 210px; }
+.cop-describe .cop-btn { white-space: nowrap; }
+
 /* nft cards page */
 .cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 18px; }
 .nft-card {

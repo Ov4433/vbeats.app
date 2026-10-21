@@ -18,6 +18,7 @@
   const STEPS = 16;
   const MINOR = [0, 2, 3, 5, 7, 8, 10];       // natural minor intervals
   const PENTA = [0, 3, 5, 7, 10, 12];          // minor pentatonic (+ octave)
+  const MAJOR_PENTA = [0, 2, 4, 7, 9, 12];     // major pentatonic (+ octave)
   const BASS_ROOT = 33;                        // A1
   const MELODY_ROOT = 57;                      // A3
 
@@ -48,6 +49,7 @@
     boombap: { name: 'Boom Bap', bpm: 90 },
     trap: { name: 'Trap', bpm: 140 },
     house: { name: 'House', bpm: 124 },
+    drill: { name: 'Drill', bpm: 142 },
   };
   function buildFrame(styleKey) {
     const style = STYLES[styleKey] || STYLES.boombap;
@@ -60,6 +62,10 @@
       kick = on([0, 4, 8, 12]);                    // four on the floor
       snare = on([4, 12]);                         // clap slots
       hat = on([2, 6, 10, 14, 15]);                // offbeats + pickup
+    } else if (styleKey === 'drill') {
+      kick = on([0, 3, 7, 10]);                    // syncopated bounce, leans off the grid
+      snare = on([8]);                             // waits for the 3 — half-time tension
+      hat = on([0, 2, 4, 5, 7, 8, 10, 12, 13, 15]); // busy, off-kilter chatter
     } else {
       kick = on([0, 3, 6, 10]);                    // swung-feel placement
       snare = on([4, 12]);
@@ -88,8 +94,9 @@
   }
 
   /* ---------- Forte: sparse melody that leaves vocal space ---------- */
-  function findSpace(pattern, root) {
+  function findSpace(pattern, root, scale) {
     const r = root == null ? MELODY_ROOT : root;
+    const sc = scale && scale.length ? scale : PENTA;
     const layerCount = i =>
       (pattern.kick[i] ? 1 : 0) + (pattern.snare[i] ? 1 : 0) +
       (pattern.hat[i] ? 1 : 0) + (pattern.bass[i] != null ? 1 : 0);
@@ -107,7 +114,7 @@
       if (!open(i)) continue;
       if (picked.length && i - picked[picked.length - 1] < 2) continue; // breathing room inside the phrase
       picked.push(i);
-      melody[i] = r + PENTA[picked.length % PENTA.length];
+      melody[i] = r + sc[picked.length % sc.length];
     }
     return {
       melody,
@@ -166,7 +173,97 @@
     return { pattern: p, removed: before - countHits(p), accentKept };
   }
 
-  return { STEPS, MINOR, PENTA, BASS_ROOT, MELODY_ROOT, STYLES,
+  /* ---------- Density: thin the hats out, or fill them in ---------- */
+  function adjustDensity(pattern, density) {
+    const p = clone(pattern);
+    if (density === 'sparse') {
+      p.hat = p.hat.map((v, i) => (i % 4 === 0 ? v : 0));   // hats only on the quarters
+    } else if (density === 'busy') {
+      p.hat = p.hat.map((v, i) => (v || i % 2 === 0 || i === 13 || i === 15) ? 1 : 0); // 8ths + roll-tail 16ths
+    }
+    return p;
+  }
+
+  /* ---------- Describe-a-beat: rule-based parsing, no fake AI ----------
+     Understands exactly five things and says so:
+       style   — boom bap / trap / house / drill
+       bpm     — a bare number in 40..240
+       density — sparse|minimal|... -> 'sparse', busy|full|... -> 'busy'
+       mood    — dark|... -> 'dark', bright|... -> 'bright'
+     Anything else lands in `ignored` so the crew can admit what it missed. */
+  const DESCRIBE_SPARSE = ['sparse', 'minimal', 'stripped', 'open', 'airy', 'spacious', 'lean'];
+  const DESCRIBE_BUSY = ['busy', 'full', 'dense', 'packed', 'heavy', 'thick', 'driving'];
+  const DESCRIBE_DARK = ['dark', 'moody', 'grim', 'sad', 'evil', 'haunted', 'cold'];
+  const DESCRIBE_BRIGHT = ['bright', 'happy', 'uplifting', 'sunny', 'major', 'warm', 'feelgood'];
+  const DESCRIBE_STYLE_WORDS = ['boom', 'bap', 'boombap', 'trap', 'house', 'drill'];
+  const DESCRIBE_STOP = new Set(['a', 'an', 'the', 'and', 'with', 'at', 'in', 'on', 'of', 'it', 'that', 'this',
+    'beat', 'beats', 'track', 'song', 'loop', 'vibe', 'vibes', 'make', 'me', 'some', 'please',
+    'kind', 'style', 'type', 'feel', 'feeling', 'sound', 'sounding', 'like', 'bpm', 'tempo']);
+  function parseDescribe(text) {
+    const raw = String(text || '').toLowerCase();
+    const out = { style: null, bpm: null, density: null, mood: null, ignored: [] };
+    const miss = w => { if (!out.ignored.includes(w)) out.ignored.push(w); };
+
+    if (/boom[\s-]?bap/.test(raw)) out.style = 'boombap';
+    else if (/\btrap\b/.test(raw)) out.style = 'trap';
+    else if (/\bhouse\b/.test(raw)) out.style = 'house';
+    else if (/\bdrill\b/.test(raw)) out.style = 'drill';
+
+    (raw.match(/\d+/g) || []).forEach(n => {
+      const v = parseInt(n, 10);
+      if (v >= 40 && v <= 240 && out.bpm == null) out.bpm = v;
+      else if (v !== out.bpm) miss(n);
+    });
+
+    (raw.match(/[a-z]+/g) || []).forEach(w => {
+      if (DESCRIBE_STYLE_WORDS.includes(w) || DESCRIBE_STOP.has(w)) return;
+      if (DESCRIBE_SPARSE.includes(w)) { out.density = 'sparse'; return; }
+      if (DESCRIBE_BUSY.includes(w)) { out.density = 'busy'; return; }
+      if (DESCRIBE_DARK.includes(w)) { out.mood = 'dark'; return; }
+      if (DESCRIBE_BRIGHT.includes(w)) { out.mood = 'bright'; return; }
+      miss(w);
+    });
+    return out;
+  }
+
+  /* ---------- Render math for publishing a pattern ----------
+     One bar = 16 sixteenths = 4 beats. Pure numbers, so the WAV the studio
+     renders and the `dur` field it uploads can be checked headlessly. */
+  function barDurationSec(bpm) { return (60 / bpm) * 4; }
+  function patternDurationSec(bpm, bars) { return barDurationSec(bpm) * (bars || 1); }
+
+  /* Encode mono/stereo Float32 channel data (arrays or typed arrays,
+     samples in -1..1) as a 16-bit PCM WAV byte array. */
+  function encodeWav(channels, sampleRate) {
+    const numCh = channels.length;
+    const frames = channels[0].length;
+    const blockAlign = numCh * 2;
+    const dataSize = frames * blockAlign;
+    const buf = new ArrayBuffer(44 + dataSize);
+    const v = new DataView(buf);
+    const wstr = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+    wstr(0, 'RIFF'); v.setUint32(4, 36 + dataSize, true); wstr(8, 'WAVE');
+    wstr(12, 'fmt '); v.setUint32(16, 16, true);
+    v.setUint16(20, 1, true);                       // PCM
+    v.setUint16(22, numCh, true);
+    v.setUint32(24, sampleRate, true);
+    v.setUint32(28, sampleRate * blockAlign, true); // byte rate
+    v.setUint16(32, blockAlign, true);
+    v.setUint16(34, 16, true);                      // bits per sample
+    wstr(36, 'data'); v.setUint32(40, dataSize, true);
+    let off = 44;
+    for (let i = 0; i < frames; i++) {
+      for (let c = 0; c < numCh; c++) {
+        const s = Math.max(-1, Math.min(1, channels[c][i] || 0));
+        v.setInt16(off, s < 0 ? Math.round(s * 0x8000) : Math.round(s * 0x7FFF), true);
+        off += 2;
+      }
+    }
+    return new Uint8Array(buf);
+  }
+
+  return { STEPS, MINOR, PENTA, MAJOR_PENTA, BASS_ROOT, MELODY_ROOT, STYLES,
     emptyPattern, clone, trackHits, countHits, activeLayers, noteName,
-    buildFrame, rideBassline, findSpace, fiveSecondTest, stripBack };
+    buildFrame, rideBassline, findSpace, fiveSecondTest, stripBack,
+    adjustDensity, parseDescribe, barDurationSec, patternDurationSec, encodeWav };
 });
