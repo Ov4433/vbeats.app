@@ -296,6 +296,40 @@ body.has-tabbar { padding-bottom: 88px; }
 .post-actions .price { font-weight: 800; font-size: 16px; margin-right: auto; }
 .post-actions .play-btn { width: 44px; height: 44px; font-size: 17px; }
 
+/* --- beat maker sequencer --- */
+:root { --gold: #f5c542; }
+.seq-transport { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.seq-bpm-label { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: var(--mut); }
+.seq-bpm-label input { width: 76px; padding: 8px; }
+.seq-grid { display: grid; grid-template-columns: 52px repeat(16, 1fr); gap: 4px; align-items: center; }
+.seq-label { font-size: 12px; font-weight: 700; color: var(--mut); }
+.seq-cell { height: 30px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel2);
+  cursor: pointer; color: #fff; font-size: 9px; font-weight: 700; padding: 0; }
+.seq-cell.beat { border-color: #33333f; }
+.seq-cell.on.seq-drums { background: var(--pur); border-color: var(--pur); }
+.seq-cell.on.seq-bass { background: var(--blu); border-color: var(--blu); }
+.seq-cell.on.seq-mel { background: var(--gold); border-color: var(--gold); color: #141005; }
+.seq-cell.now { box-shadow: 0 0 0 2px #fff inset; }
+@media (max-width: 640px) { .seq-cell { height: 24px; font-size: 7px; } .seq-grid { grid-template-columns: 40px repeat(16, 1fr); gap: 3px; } }
+
+/* --- V Team co-producer panel --- */
+.cop-card { margin-top: 18px; }
+.cop-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; flex-wrap: wrap; }
+.cop-actions { display: flex; flex-direction: column; gap: 8px; margin: 16px 0 6px; }
+.cop-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.cop-row select { width: auto; padding: 8px 10px; font-size: 13px; }
+.cop-btn { text-align: left; border-left: 4px solid var(--line); }
+.cop-btn.bat-volt { border-left-color: var(--pur); }
+.cop-btn.bat-bass { border-left-color: var(--blu); }
+.cop-btn.bat-forte { border-left-color: var(--gold); }
+.cop-btn.bat-gwei { border-left-color: var(--grn); }
+.cop-line { background: var(--panel2); border: 1px solid var(--line); border-left: 4px solid var(--line);
+  border-radius: 4px 12px 12px 12px; padding: 10px 14px; font-size: 14px; margin-top: 10px; line-height: 1.45; }
+.cop-line.bat-volt { border-left-color: var(--pur); } .cop-line.bat-volt b { color: #c9a7ff; }
+.cop-line.bat-bass { border-left-color: var(--blu); } .cop-line.bat-bass b { color: var(--blu); }
+.cop-line.bat-forte { border-left-color: var(--gold); } .cop-line.bat-forte b { color: var(--gold); }
+.cop-line.bat-gwei { border-left-color: var(--grn); } .cop-line.bat-gwei b { color: var(--grn); }
+
 /* nft cards page */
 .cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 18px; }
 .nft-card {
