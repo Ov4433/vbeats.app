@@ -23,6 +23,15 @@ export const config = {
     .filter(Boolean),
   uploadDir: process.env.UPLOAD_DIR ?? 'uploads',
   maxUploadMb: Number(process.env.MAX_UPLOAD_MB ?? 50),
+  // --- Durable audio storage (Cloudflare R2, S3-compatible) ---
+  // When all five are set, uploads go to R2 and beats store the public URL.
+  // When unset, uploads fall back to the local disk (dev only — Render's
+  // disk is ephemeral and wipes on redeploy).
+  r2AccountId: process.env.R2_ACCOUNT_ID ?? '',
+  r2AccessKeyId: process.env.R2_ACCESS_KEY_ID ?? '',
+  r2SecretAccessKey: process.env.R2_SECRET_ACCESS_KEY ?? '',
+  r2Bucket: process.env.R2_BUCKET ?? '',
+  r2PublicBaseUrl: (process.env.R2_PUBLIC_BASE_URL ?? '').replace(/\/+$/, ''),
   // Brand assets live at the repo root (../brand relative to backend/).
   // Override with BRAND_DIR when the layout differs.
   brandDir:

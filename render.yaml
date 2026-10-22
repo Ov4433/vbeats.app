@@ -43,3 +43,15 @@ services:
         sync: false # leave blank until you wire up on-chain verification
       - key: BEAT_REGISTRY_ADDRESS
         sync: false
+      # Durable audio storage (Cloudflare R2). Set all five in the dashboard;
+      # until then uploads fall back to the ephemeral local disk.
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET
+        sync: false
+      - key: R2_PUBLIC_BASE_URL
+        sync: false

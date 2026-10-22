@@ -14,6 +14,12 @@ import {
 } from '../utils/serialize';
 import { sha256File } from '../services/fingerprintService';
 import {
+  r2Configured,
+  storeAudioFile,
+  r2KeyForUrl,
+  deleteAudioObject,
+} from '../services/storageService';
+import {
   checkFingerprintOnChain,
   registerBeatOnChain,
 } from '../services/chainService';
@@ -83,7 +89,9 @@ async function voteInputs(
 }
 
 // ---------------------------------------------------------------------------
-// Multer: audio uploads land in <uploadDir>/ and are served at /uploads/*
+// Multer: uploads land in <uploadDir>/ as a temp pad, then move to R2 when
+// configured (see uploadBeat). Local files are served at /uploads/* only in
+// the no-R2 fallback (dev).
 // ---------------------------------------------------------------------------
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => {
@@ -199,7 +207,8 @@ export const createBeat = asyncHandler(async (req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 // POST /v1/beats/upload — multipart audio upload.
 // Fields: title, desc|description, genre, bpm, price, dur|duration (+ file "audio").
-// Computes the SHA-256 fingerprint server-side and stores the file locally.
+// Computes the SHA-256 fingerprint server-side and stores the file durably
+// (Cloudflare R2 when configured; local disk fallback otherwise).
 // ---------------------------------------------------------------------------
 export const uploadBeat = [
   upload.single('audio'),
@@ -218,7 +227,27 @@ export const uploadBeat = [
     }
 
     const fingerprint = await sha256File(req.file.path);
-    const audioUrl = `/uploads/${path.basename(req.file.path)}`;
+
+    // Durable storage: when R2 is configured, the file goes to the bucket
+    // and the beat stores its public URL. Local disk is only a temp landing
+    // pad (it is ephemeral on Render and wipes on redeploy). If the R2 write
+    // fails, fail the upload — never store a URL that will 404 later.
+    let audioUrl: string;
+    if (r2Configured()) {
+      try {
+        audioUrl = await storeAudioFile(
+          req.file.path,
+          req.file.originalname,
+          req.file.mimetype
+        );
+      } catch (err) {
+        fs.unlink(req.file.path, () => undefined);
+        throw new HttpError(502, 'Audio storage is unavailable — please retry');
+      }
+      fs.unlink(req.file.path, () => undefined);
+    } else {
+      audioUrl = `/uploads/${path.basename(req.file.path)}`;
+    }
 
     const beat = await prisma.beat.create({
       data: {
@@ -597,6 +626,8 @@ export const deleteBeat = asyncHandler(async (req: Request, res: Response) => {
   await prisma.beat.delete({ where: { id: beat.id } });
   const localPath = localPathForAudioUrl(beat.audioUrl);
   if (localPath) fs.unlink(localPath, () => undefined);
+  const r2Key = r2Configured() ? r2KeyForUrl(beat.audioUrl) : null;
+  if (r2Key) deleteAudioObject(r2Key).catch(() => undefined);
   res.status(200).json({ ok: true });
 });
 
