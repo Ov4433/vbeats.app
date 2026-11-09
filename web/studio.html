@@ -6,6 +6,21 @@
 <title>Studio — Verified Beats Studio</title>
 <link rel="icon" href="assets/logo.png">
 <link rel="stylesheet" href="css/style.css">
+<style>
+  /* Echobeatification (live merge, Nov 7, no cold open): load screen IS the
+     bats' ears, radar instead of a generic spinner. */
+  .echo-stage { border: 2px solid var(--gold); border-radius: 10px; padding: 12px; margin-top: 10px; }
+  .echo-bats { font-size: 28px; letter-spacing: 6px; }
+  .echo-listening .echo-bats { transform: rotate(-12deg); display: inline-block; }
+  .echo-radar { width: 110px; height: 110px; border-radius: 50%; margin: 10px 0;
+    border: 2px solid var(--gold); position: relative; overflow: hidden; background: var(--panel2); }
+  .echo-radar::after { content: ""; position: absolute; inset: 0; transform-origin: center;
+    background: conic-gradient(from 0deg, rgba(255,215,0,0.55), transparent 90deg); }
+  .echo-sweeping::after { animation: echo-sweep 1.2s linear infinite; }
+  @keyframes echo-sweep { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  .echo-locked { border-color: #4caf50; }
+  .echo-label { font-weight: 800; font-size: 18px; margin-top: 8px; }
+</style>
 </head>
 <body>
 <nav class="nav" id="nav"></nav>
@@ -70,7 +85,70 @@
       </div>
       <p class="note" style="margin-top:0">Volt reads plain words: a style (boom bap, trap, house, drill), a tempo number, sparse or busy, dark or bright. Anything else, he'll admit he doesn't know it.</p>
       <div id="cop-log"><p class="note">Quiet in here. The crew only speaks when you call them.</p></div>
+      <div id="live-spat" style="display:none; margin-top:12px"></div>
     </div>
+  </div>
+
+  <!-- Echobeatification — echo becomes beat (live merge, Nov 7, no cold open).
+       Producer hums words in the notepad, V Team asks to match that echo,
+       bats lean ear in, radar homing, lock, then the beat drops. -->
+  <div class="card" style="margin-top:18px">
+    <h2 style="margin-top:0">Echobeatification — echo becomes beat</h2>
+    <p class="note">Producer sitting, app up, humming words as he writes them in the notepad, just trying to find his way.
+    The V Team asks to match that echo. He keeps repeating it, bats lean their ear in, eyes closed.
+    The load screen is their ears — radar homing, no generic spinner. One sweep, lock, then the beat drops.</p>
+    <p class="note"><b>Hum-to-beat first:</b> record yourself humming a beat, it listens, and makes it a beat. Pitch detection runs on-device; nothing leaves this browser. If the mic is unavailable, the scripted safety net runs instead.</p>
+    <div class="demo-row" style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0">
+      <button class="btn small" id="live-hum">🎤 Hum a melody (one bar)</button>
+      <span class="note" id="live-hum-note"></span>
+      <button class="btn small ghost" id="live-scripted">Run scripted demo (safety net)</button>
+    </div>
+    <div class="field">
+      <label>Notepad — write the words you're humming</label>
+      <textarea class="demo-field" id="echo-notepad" rows="2" placeholder="Write the words you're humming…" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);color:inherit"></textarea>
+      <div class="demo-row" style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0"><button class="btn small" id="echo-ask">🦇 V Team, match my echo</button></div>
+    </div>
+    <div class="demo-row" id="echo-confirm" style="display:none;gap:8px;flex-wrap:wrap;margin:8px 0">
+      <span class="note">Volt: Would you like to let us try to match that echo?</span>
+      <button class="btn small" id="echo-yes">Yes, match it</button>
+      <button class="btn small ghost" id="echo-no">No, leave it</button>
+    </div>
+    <div class="echo-stage" id="echo-stage" style="display:none">
+      <div class="echo-bats" aria-label="Bats leaning their ear in, eyes closed">🦇 🦇 🦇 🦇</div>
+      <p class="note" id="echo-repeat"></p>
+      <div class="echo-radar" id="echo-radar" data-progress="0"></div>
+      <p class="note" id="echo-progress"></p>
+      <p class="echo-label" id="echo-label"></p>
+      <p class="note">Radar follows the echo — rings pulse, homing dot locks on the notes. This is our visualization for browser pitch detection + crew listening. Voice Transcribe hears words, Spark arranges. Meta does not do echolocation literally.</p>
+    </div>
+    <div id="demo-log" style="margin-top:12px"></div>
+  </div>
+
+  <!-- Forte's home — the loop, live: theme in, suggestion out -->
+  <div class="card" style="margin-top:18px">
+    <h2 style="margin-top:0">Forte's home — the loop, live</h2>
+    <p class="note">Write the theme here, in Forte's home — then hear it reflected in the session. Write it there, hear it here — that is the loop, live.</p>
+    <input class="demo-field" id="live-forte-theme" placeholder="Write the theme the demo artist is working on…" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);color:inherit">
+    <div class="demo-row" style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0"><button class="btn small" id="live-forte-go">Forte, carry this into the session</button></div>
+  </div>
+
+  <!-- Meta API — live test (Nov 8, Star: "Let's do that").
+       Paid usage: $150 credits never landed, so a test call charges the
+       card on file (Visa ending 3018, $20 threshold). A short Spark test
+       is cents. Key is stored ONLY in this browser's localStorage, never
+       sent to Muse, never in a file, never in chat. -->
+  <div class="card" style="margin-top:18px">
+    <h2 style="margin-top:0">Meta API — live test</h2>
+    <p class="note" id="meta-live-status">Voice + Spark: local fallback active.</p>
+    <div class="field"><label>Meta Model API key — saved in this browser only</label>
+      <input id="meta-key-input" type="password" placeholder="Paste your key here, on this device only" autocomplete="off" style="width:100%">
+    </div>
+    <div class="demo-row" style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0">
+      <button class="btn small" id="meta-key-save">Save key in this browser only</button>
+      <button class="btn small" id="meta-test-go">Test live Spark — one short call</button>
+      <button class="btn small ghost" id="meta-key-clear">Clear key</button>
+    </div>
+    <p class="note">Test call: Spark 1.3, one short question, a few hundred tokens, cents at Standard pricing. Do NOT paste your key in chat, to me, or anywhere else. Realtime Voice Transcribe is not wired yet — file transcription is the first live step, in code only so far.</p>
   </div>
 
   <div class="page-head"><div><h1>Recording Studio</h1><p>Record from your mic, then publish straight to the marketplace.</p></div></div>
@@ -118,6 +196,52 @@
 <script src="js/daily-lines.js"></script>
 <script src="js/sequencer.js"></script>
 <script src="js/coproducer.js"></script>
+<script src="js/demo-hum.js"></script>
+<script src="js/demo-echobeat.js"></script>
+<script src="js/demo-spats.js"></script>
+<script src="js/demo-safety.js"></script>
+<script src="js/demo-voice.js"></script>
+<script src="js/live-adapter.js"></script>
+<script>
+/* Meta API live-test wiring — key stays in this browser only. */
+(function () {
+  if (!window.DemoVoice) return;
+  const $ = id => document.getElementById(id);
+  const statusEl = $('meta-live-status');
+  function renderStatus() {
+    if (statusEl) statusEl.textContent = DemoVoice.gateNotice();
+  }
+  renderStatus();
+  const saveBtn = $('meta-key-save');
+  if (saveBtn) saveBtn.onclick = () => {
+    const input = $('meta-key-input');
+    const ok = DemoVoice.setLocalKey(input ? input.value : '');
+    if (input) input.value = '';
+    if (statusEl) statusEl.textContent = ok
+      ? 'Key saved in this browser only. Now tap "Test live Spark" — one short paid call.'
+      : 'Key not saved — it was empty, or this browser blocks storage.';
+    renderStatus();
+  };
+  const clearBtn = $('meta-key-clear');
+  if (clearBtn) clearBtn.onclick = () => {
+    DemoVoice.clearLocalKey();
+    if (statusEl) statusEl.textContent = 'Key cleared from this browser.';
+  };
+  const testBtn = $('meta-test-go');
+  if (testBtn) testBtn.onclick = async () => {
+    testBtn.disabled = true; testBtn.textContent = 'Testing live Spark…';
+    try {
+      const r = await DemoVoice.testLiveSpark();
+      if (statusEl) statusEl.textContent = r.mode === 'live'
+        ? 'LIVE — Spark answered: "' + r.text + '" Paid test call, credits never landed.'
+        : 'Live test failed, fallback stays on: ' + (r.error || 'unknown error');
+    } finally {
+      testBtn.disabled = false; testBtn.textContent = 'Test live Spark — one short call';
+      renderStatus();
+    }
+  };
+})();
+</script>
 <script>
 nav('studio.html');
 const $ = id => document.getElementById(id);
