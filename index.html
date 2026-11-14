@@ -14,33 +14,32 @@
   <!-- Bat-routed home lead (filled by JS when the user has a home bat) -->
   <div id="home-lead"></div>
 
-  <!-- Stories row: quick moves, app-style -->
+  <!-- State-aware hero (Grok + ChatGPT): new visitors get one sentence,
+       a 3-step How It Works and a dual path. Returning users get the CTA
+       that matches their wallet / pass state (filled by JS below). -->
+  <div id="home-hero"></div>
+
+  <!-- Stories row (Grok, Nov 13): four quick moves only — Create ·
+       Upload · Find beats · Volt Pass. Cards / The Booth / Live stay in
+       the nav and bottom tab, not in stories. Hidden for new visitors
+       (the hero is their first step); condensed for returning users. -->
   <div class="stories" id="sec-stories">
     <a class="story rec" href="studio.html">
-      <span class="ring"><span class="glyph">⏺</span></span><span>You · Record</span>
+      <span class="ring"><span class="glyph">⏺</span></span><span>Create</span>
     </a>
     <a class="story" href="upload.html">
       <span class="ring"><img src="assets/mascot-profile.webp" alt=""></span><span>Upload</span>
     </a>
+    <a class="story" href="marketplace.html">
+      <span class="ring"><span class="glyph">🧭</span></span><span>Find beats</span>
+    </a>
     <a class="story" href="claim.html">
       <span class="ring"><span class="glyph">🎟️</span></span><span>Volt Pass</span>
     </a>
-    <a class="story" href="live.html">
-      <span class="ring"><span class="glyph">🎙️</span></span><span>Live</span>
-    </a>
-    <a class="story" href="marketplace.html">
-      <span class="ring"><span class="glyph">🧭</span></span><span>Explore</span>
-    </a>
-    <a class="story" href="cards.html">
-      <span class="ring"><span class="glyph">🃏</span></span><span>Cards</span>
-    </a>
-    <a class="story" href="chat.html">
-      <span class="ring"><span class="glyph">💬</span></span><span>The Booth</span>
-    </a>
   </div>
 
-  <div class="hero-mascot" id="sec-hero" style="margin:6px 0 4px">
-    <div class="bubble">🦇 <b>Welcome to the studio.</b> <span style="color:var(--mut);font-size:14px">Every beat in this feed is fingerprinted &amp; verified on-chain. Volt keeps the receipts.</span></div>
+  <div class="hero-mascot" id="sec-hero" style="display:none">
+    <div class="bubble">🦇 <b>Welcome to the studio.</b> <span style="color:var(--mut);font-size:14px">Every beat in this feed is fingerprinted. Open a beat for its on-chain receipt — Volt keeps the receipts.</span></div>
   </div>
 
   <section class="topvoted" id="topvoted-section" style="display:none">
@@ -49,17 +48,26 @@
   </section>
 
   <div class="feed">
+    <!-- Following had no following list behind it (it just showed all
+         beats), so the toggle is gone until real following exists. The
+         feed is Trending: plays + votes, not price. -->
     <div class="feed-toggle">
-      <button id="tg-following" class="on" onclick="setFeed('following')">Following</button>
-      <button id="tg-trending" onclick="setFeed('trending')">Trending</button>
+      <button class="on" disabled>Trending</button>
+      <span style="flex:1"></span>
+      <span class="note">Show:</span>
+      <button class="kind-chip on" data-kind="all">All</button>
+      <button class="kind-chip" data-kind="beat">Beats</button>
+      <button class="kind-chip" data-kind="song">Songs</button>
     </div>
-    <div id="feed"><p class="note" style="text-align:center;padding:24px">Loading the feed…</p></div>
+    <div id="feed"></div>
   </div>
+  <div id="chain-explainer"></div>
 </main>
 
 <footer class="footer"><div class="footer-bat"><img src="assets/mascot-profile.webp" alt=""></div>Verified Beats Studio — Volt keeps the receipts.</footer>
 
 <script src="js/api.js"></script>
+<script src="js/flow.js"></script>
 <script src="js/volt.js"></script>
 <script>
 nav('index.html');
@@ -122,18 +130,103 @@ if (api.loggedIn()) {
   }).catch(() => { /* local mirror already applied */ });
 }
 
-let allBeats = [];
-let feedMode = 'following';
-let currentAudio = null;
-let playStartedAt = 0;
-let playingId = '';
+/* ---- State-aware home hero (Grok, Nov 13) -------------------------------
+   Cold visitors (no wallet, not signed in) get the dual-path hero —
+   Producer vs Listener/Artist cards — plus How It Works.
+   Returning users get a single CTA that matches their wallet / pass
+   state, and no How It Works / dual-path dump:
+   Not connected → "Connect wallet & claim your bat".
+   Connected, no pass → "Get Volt Pass" + progress even at 2–3 VBEATS.
+   Has pass → "Drop a beat" / "Go live". */
+function heroHtml(cta, cold) {
+  const dualPath = cold ? `<div class="path-row">
+      <a class="path-card path-producer" href="studio.html"><span class="path-glyph">⏺</span><b>I&rsquo;m a producer</b><p>Beat maker, sequencer &amp; the V Team co-producer — build a beat, fingerprint it, list it.</p><span class="path-cta">Open the studio &rarr;</span></a>
+      <a class="path-card path-listener" href="marketplace.html"><span class="path-glyph">🧭</span><b>I&rsquo;m looking for beats</b><p>Preview fingerprinted beats, buy a license when listed, or make an offer.</p><span class="path-cta">Find beats &rarr;</span></a>
+    </div>
+    <div class="how-it-works">
+      <div class="step-card"><b>1 · Find a beat</b><p>Browse and preview — every beat fingerprinted.</p></div>
+      <div class="step-card"><b>2 · Buy &amp; download</b><p>Choose a license — buy instantly when listed, or make an offer — then download.</p></div>
+      <div class="step-card"><b>3 · Release &amp; earn</b><p>Drop your track, collect royalties, keep the receipt.</p></div>
+    </div>` : '';
+  return `<div class="flow-hero"><h1>Hear it, <span>verify it</span>, own it.</h1>
+    <p class="lede">Verified beats. Real ownership. Create, lease, and own music on-chain.</p>
+    <div class="flow-cta">${cta}</div>
+    ${dualPath}</div>`;
+}
+async function renderHomeHero() {
+  const hero = document.getElementById('home-hero');
+  const stories = document.getElementById('sec-stories');
+  const wallet = api.wallet;
+  const signedIn = api.loggedIn();
+  if (!wallet && !signedIn) {
+    stories.style.display = 'none';
+    hero.innerHTML = heroHtml('<button class="btn" id="hero-connect">Connect wallet &amp; claim your bat</button><a class="btn ghost" href="marketplace.html">Browse beats first</a>', true);
+    document.getElementById('hero-connect').onclick = async () => {
+      try { await api.connectWallet(); renderUser(); renderHomeHero(); }
+      catch (e) { Volt.help(e.message || String(e)); }
+    };
+    return;
+  }
+  stories.style.display = '';
+  stories.classList.add('condensed');
+  if (!wallet) {
+    hero.innerHTML = heroHtml('<button class="btn" id="hero-connect">Connect wallet &amp; claim your bat</button>');
+    document.getElementById('hero-connect').onclick = async () => {
+      try { await api.connectWallet(); renderUser(); renderHomeHero(); }
+      catch (e) { Volt.help(e.message || String(e)); }
+    };
+    return;
+  }
+  // Wallet connected: check pass state, but never block the hero on it.
+  try {
+    const [me, elig] = await Promise.all([
+      api.get('/v1/pass/me/' + wallet).catch(() => null),
+      api.get('/v1/pass/eligibility/' + wallet).catch(() => null),
+    ]);
+    if (me && me.hasPass) {
+      hero.innerHTML = heroHtml('<a class="btn" href="studio.html">Drop a beat</a><a class="btn ghost" href="live.html">Go live</a>');
+    } else {
+      const bal = elig ? (elig.balanceFormatted != null ? elig.balanceFormatted : elig.balance) : null;
+      hero.innerHTML = heroHtml('<a class="btn" href="claim.html">Get Volt Pass (hold 10 $VBEATS)</a>') +
+        (bal != null ? Flow.passProgressHtml(bal, 10) : '');
+    }
+  } catch {
+    hero.innerHTML = heroHtml('<a class="btn" href="claim.html">Get Volt Pass (hold 10 $VBEATS)</a>');
+  }
+}
+renderHomeHero();
+document.getElementById('chain-explainer').innerHTML = Flow.chainExplainerHtml();
 
-api.marketplace({ limit: 12 }).then(d => {
-  allBeats = d.beats || [];
-  renderFeed();
-}).catch(() => {
-  document.getElementById('feed').innerHTML = '<p class="note" style="text-align:center;padding:24px">Marketplace is waking up (free tier cold start) — refresh in a few seconds.</p>';
+let allBeats = [];
+let feedKind = 'all'; // All | Beats | Songs (Nov 13) — server-filtered
+// via ?kind=, with a client-side filter on top for old-backend safety.
+
+function loadFeed() {
+  document.getElementById('feed').innerHTML = Flow.skeletonHtml(3);
+  const params = { limit: 12, window: '7d' };
+  if (feedKind !== 'all') params.kind = feedKind;
+  Flow.fetchWithRetry(() => api.marketplace(params), 3).then(d => {
+    allBeats = d.beats || [];
+    renderFeed();
+  }).catch(() => {
+    document.getElementById('feed').innerHTML = Flow.coldStartHtml();
+  });
+}
+document.querySelectorAll('.kind-chip').forEach(btn => {
+  btn.onclick = () => {
+    feedKind = btn.getAttribute('data-kind');
+    document.querySelectorAll('.kind-chip').forEach(b => b.classList.toggle('on', b === btn));
+    loadFeed();
+  };
 });
+loadFeed();
+
+/* Skeleton first, auto-retry on the free-tier cold start (Claude), with a
+   next action instead of a dead "refresh in a few seconds".
+   Weekly trending: ?window=7d returns real 7-day plays + votes per beat.
+   The "Trending this week" label is shown ONLY when at least 3 beats
+   have week activity — otherwise the feed falls back to lifetime
+   trending and is labelled plain "Trending". */
 
 api.topVoted().then(d => {
   const beats = (d && d.beats) || [];
@@ -153,85 +246,76 @@ api.topVoted().then(d => {
 });
 
 async function toggleVote(btn, id) {
-  if (!api.loggedIn()) {
-    if (confirm('Sign in to vote — head to the sign-in page?')) location.href = 'upload.html';
-    return;
-  }
+  // Wallet-first: the sign-in modal returns you to where you were —
+  // the old confirm() dumped you on upload.html.
+  if (!api.loggedIn() && !api.wallet) { Flow.signInModal('vote'); return; }
+  if (!api.loggedIn()) { Flow.signInModal('vote'); return; }
   try {
     btn.disabled = true;
     const r = await api.vote(id);
     const count = btn.querySelector('.vote-count');
     if (count) count.textContent = r.totalWeight;
     btn.classList.toggle('voted', !!r.voted);
+    if (r.voted) Flow.nextSteps(document.getElementById('vote-next'), {
+      title: 'Vote counted.',
+      text: 'Your vote moves this beat up the weekly Top Voted chart.',
+      actions: [{ label: 'See Top Voted', href: '#topvoted-section' }, { label: 'Open the beat', href: 'beat.html?id=' + encodeURIComponent(id), ghost: true }],
+    });
   } catch (e) { alert(e.message || e); }
   finally { btn.disabled = false; }
 }
 
-function setFeed(mode) {
-  feedMode = mode;
-  document.getElementById('tg-following').classList.toggle('on', mode === 'following');
-  document.getElementById('tg-trending').classList.toggle('on', mode === 'trending');
-  renderFeed();
-}
-
 function renderFeed() {
   const box = document.getElementById('feed');
-  if (!allBeats.length) {
-    box.innerHTML = `<div style="text-align:center;padding:28px 16px">
-      <img src="assets/mascot-profile.webp" alt="" style="width:110px;border-radius:50%;margin-bottom:10px">
-      <p class="note">No beats yet — be the first to drop one.</p>
-      <p style="margin-top:14px"><a class="btn" href="studio.html">⏺ Open the studio</a></p></div>`;
+  // Client-side kind filter on top of the server one (old backend
+  // ignores ?kind= and returns everything).
+  const shown = feedKind === 'all' ? allBeats : allBeats.filter(b => (b.kind || 'beat') === feedKind);
+  if (!shown.length) {
+    if (feedKind === 'song') {
+      box.innerHTML = `<div style="text-align:center;padding:28px 16px">
+        <p class="note">No songs yet — be the first to rap on a beat.</p>
+        <p style="margin-top:14px"><a class="btn" href="make.html">🎤 Make a song</a></p></div>`;
+    } else if (feedKind === 'beat') {
+      box.innerHTML = `<div style="text-align:center;padding:28px 16px">
+        <p class="note">No beats in this view yet.</p>
+        <p style="margin-top:14px"><a class="btn" href="studio.html">⏺ Open the studio</a></p></div>`;
+    } else {
+      box.innerHTML = `<div style="text-align:center;padding:28px 16px">
+        <img src="assets/mascot-profile.webp" alt="" style="width:110px;border-radius:50%;margin-bottom:10px">
+        <p class="note">No beats yet — be the first to drop one.</p>
+        <p style="margin-top:14px"><a class="btn" href="studio.html">⏺ Open the studio</a></p></div>`;
+    }
     return;
   }
-  const beats = feedMode === 'trending'
-    ? [...allBeats].sort((a, b) => (Number(b.price) || 0) - (Number(a.price) || 0))
-    : allBeats;
-  box.innerHTML = beats.map(post).join('');
+  // Weekly trending when the week is thick enough (≥3 beats with week
+  // activity), otherwise lifetime trending — and the label follows the
+  // data, never the other way round.
+  const weekly = Flow.weeklyActiveCount(shown) >= 3;
+  const beats = weekly ? Flow.sortWeekly(shown) : Flow.sortTrending(shown);
+  const label = weekly ? 'Trending this week' : 'Trending';
+  box.innerHTML = '<div id="vote-next"></div><p class="note" style="margin-bottom:10px">' + label + ' · ' + (weekly ? 'plays + votes from the last 7 days' : 'plays + votes, all time') + '</p>' + beats.map(post).join('');
+  Flow.wireCardMenus(box);
+  Flow.refreshUsd(box);
+  Flow.verifyCards(box); // lazy on-chain proof as cards scroll into view
 }
 
 function post(b) {
-  const art = esc(api.artUrl(b));
-  return `<article class="post">
-    <div class="post-head">
-      <img src="${art}" alt="">
-      <div>
-        <div class="who">${esc(b.title)}${b.isHouse ? ' <span class="house-tag">🏠 House beat</span>' : ''}</div>
-        <div class="sub">${esc(b.genre)}${b.bpm ? ' · ' + esc(b.bpm) + ' BPM' : ''}${b.duration || b.dur ? ' · ' + fmtDur(b.duration || b.dur) : ''}</div>
-      </div>
-      <span class="chip">✓ VERIFIED ON-CHAIN</span>
-    </div>
-    <img class="post-art" src="${art}" alt="" loading="lazy">
-    <div class="post-body">
-      <div class="post-actions">
-        <button class="play-btn" data-id="${esc(b.id)}" onclick="togglePlay(this,'${esc(b.id)}','${esc(api.mediaUrl(b))}')">▶</button>
-        <button class="btn small ghost vote-btn${b.votedByMe ? ' voted' : ''}" data-vote-id="${esc(b.id)}" onclick="toggleVote(this,'${esc(b.id)}')" aria-label="Vote for this beat">▲ <span class="vote-count">${esc(b.votes?.totalWeight ?? 0)}</span></button>
-        <span class="price">$${esc(b.price)}</span>
-        <a class="btn small ghost" href="creator.html?u=${esc(b.userId)}">Producer</a>
-        <a class="btn small" href="beat.html?id=${esc(b.id)}">Lease / Mint</a>
-        <a class="btn small ghost" href="beat.html?id=${esc(b.id)}">Make offer</a>
-        <a class="btn small ghost" href="studio.html">Remix</a>
-      </div>
-    </div>
-  </article>`;
+  // One unified card everywhere (Grok + Claude): play + ONE primary
+  // button (Buy license), vote kept visible as ▲ because the weekly
+  // Top Voted chart depends on it, the rest behind the … menu.
+  return Flow.beatCard(b);
 }
 
-function stopCurrent(btn) {
-  if (!currentAudio) return;
-  const listened = Math.round((Date.now() - playStartedAt) / 1000);
-  if (playingId && listened > 1) api.play(playingId, listened);
-  currentAudio.pause();
-  currentAudio = null; playingId = '';
-  document.querySelectorAll('.play-btn.playing').forEach(x => { x.classList.remove('playing'); x.textContent = '▶'; });
-}
-
-function togglePlay(btn, id, url) {
-  if (!url) return;
-  if (currentAudio && playingId === id && !currentAudio.paused) { stopCurrent(btn); return; }
-  stopCurrent(btn);
-  currentAudio = new Audio(url); playingId = id; playStartedAt = Date.now();
-  currentAudio.play(); btn.classList.add('playing'); btn.textContent = '⏸';
-  currentAudio.onended = () => stopCurrent(btn);
-}
+/* Delegated play / vote for unified cards (replaces per-card onclicks). */
+document.getElementById('feed').addEventListener('click', e => {
+  const playBtn = e.target.closest('[data-play-id]');
+  if (playBtn) {
+    Flow.play(playBtn.getAttribute('data-play-url'), playBtn.getAttribute('data-play-title'), playBtn);
+    return;
+  }
+  const voteBtn = e.target.closest('[data-vote-id]');
+  if (voteBtn) toggleVote(voteBtn, voteBtn.getAttribute('data-vote-id'));
+});
 </script>
 </body>
 </html>

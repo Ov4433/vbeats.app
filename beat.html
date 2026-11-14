@@ -14,17 +14,29 @@
   <div id="beat"></div>
 </main>
 <footer class="footer"><div class="footer-bat"><img src="assets/mascot-profile.webp" alt=""></div>Verified Beats Studio — Volt keeps the receipts.</footer>
-<script src="js/ethers.min.js"></script>
-<script>if (typeof ethers === 'undefined') document.write('<script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.min.js"><\/script>');</script>
-<script>if (typeof ethers === 'undefined') document.write('<script src="https://unpkg.com/ethers@6.13.4/dist/ethers.min.js"><\/script>');</script>
-<script>if (typeof ethers === 'undefined') document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.4/ethers.umd.min.js"><\/script>');</script>
 <script src="js/api.js"></script>
+<script src="js/flow.js"></script>
 <script src="js/volt.js"></script>
 <script>
 nav('');
 const id = new URLSearchParams(location.search).get('id');
 let currentBeat = null;
 let currentOffers = [];
+let directBuyReady = false;
+
+async function toggleVote(btn, beatId) {
+  // Sign-in modal returns you here — the old confirm() sent you away
+  // to upload.html.
+  if (!api.loggedIn()) { Flow.signInModal('vote'); return; }
+  try {
+    btn.disabled = true;
+    const r = await api.vote(beatId);
+    const count = btn.querySelector('.vote-count');
+    if (count) count.textContent = r.totalWeight;
+    btn.classList.toggle('voted', !!r.voted);
+  } catch (e) { alert(e.message || e); }
+  finally { btn.disabled = false; }
+}
 
 async function toggleVote(btn, beatId) {
   if (!api.loggedIn()) {
@@ -52,17 +64,37 @@ async function load() {
     document.getElementById('beat').innerHTML = `
       <div class="page-head"><div><h1>${esc(b.title)}${b.isHouse ? ' <span class="house-tag">🏠 House beat</span>' : ''}</h1>
         <p>${esc(b.genre)}${b.bpm ? ' · ' + esc(b.bpm) + ' BPM' : ''}${b.duration || b.dur ? ' · ' + fmtDur(b.duration || b.dur) : ''}</p>
-        <p class="note" style="margin-top:4px">by <a id="producer-link" href="creator.html?u=${esc(b.userId)}" style="color:var(--pur)">this producer</a></p></div>
-        <div style="text-align:right"><div class="price" style="font-size:24px">$${esc(b.price)}</div>
-        <button class="btn small ghost vote-btn${b.votedByMe ? ' voted' : ''}" id="vote-btn" data-vote-id="${esc(b.id || id)}" onclick="toggleVote(this,'${esc(b.id || id)}')" aria-label="Vote for this beat" style="margin-top:8px">▲ <span class="vote-count">${esc(b.votes?.totalWeight ?? 0)}</span></button></div></div>
+        <p class="note" style="margin-top:4px">by <a id="producer-link" href="creator.html?u=${esc(b.userId)}" style="color:var(--pur)">this producer</a></p></div></div>
       <img src="${esc(api.artUrl(b))}" alt="" style="width:100%;border-radius:16px;border:1px solid var(--line)">
       <audio class="wide" id="player" controls src="${esc(api.mediaUrl(b))}"></audio>
+      ${b.kind === 'song' ? `<div class="card" style="margin-top:16px"><h3 style="margin-bottom:8px">🎤 Song · over <a href="beat.html?id=${esc(b.parentBeatId || (b.parentBeat && b.parentBeat.id) || '')}" style="color:var(--pur)">${esc((b.parentBeat && b.parentBeat.title) || 'the parent beat')}</a></h3>
+        <p class="note">Vocals by this song's maker, over the producer's beat. The backing track stays licensed on the parent beat's page — this song is the vocal take, linked to it.</p>
+        ${b.coSignStatus === 'pending' ? '<p class="note" style="margin-top:8px"><span class="badge wait">Awaiting producer co-sign</span> — saved, but not in the public feed until the parent beat\'s producer approves it.</p>' : ''}
+        ${b.coSignStatus === 'rejected' ? '<p class="note" style="margin-top:8px"><span class="badge no">Not co-signed</span> — the parent beat\'s producer declined this song.</p>' : ''}
+        ${b.coSignStatus === 'live' && b.coSignedBy ? '<p class="note" style="margin-top:8px"><span class="badge ok">✓ Co-signed by ' + esc(b.coSignedBy.username) + '</span> — the parent beat\'s producer featured this song.</p>' : ''}
+        <p style="margin-top:10px"><button class="btn ghost small" id="share-song-btn">Share this song</button> <span class="note" id="share-note"></span></p></div>
+      <div id="feature-card"></div>` : ''}
+      ${b.kind !== 'song' ? `<div class="card" style="margin-top:16px"><h3 style="margin-bottom:8px">🎤 Make a song</h3>
+        <p class="note">Rap over this beat, Rapchat-style — pick it, record your vocals while it loops, publish a fingerprinted song linked to this beat. Your vocal take is yours; the beat's license stays here.</p>
+        <p style="margin-top:10px"><a class="btn" href="make.html?beat=${esc(b.id)}">🎤 Rap on this beat</a></p></div>` : ''}
       ${b.description || b.desc ? `<div class="card" style="margin-top:16px"><p>${esc(b.description || b.desc)}</p></div>` : ''}
+      <div class="card" style="margin-top:16px" id="buy-panel">
+        <h3 style="margin-bottom:10px">🎟️ Buy license</h3>
+        <div data-price-eth="${esc(Number(b.price) || 0)}" style="font-size:24px">${Flow.priceHtml(b)}</div>
+        <p class="note" style="margin-top:8px"><b>What you get:</b> a lease lets you use the beat in your track. A 1-of-1 exclusive means no more leases are sold. ERC-1155 &middot; 10% producer royalty on secondary sales.</p>
+        <div id="buy-direct" style="margin-top:12px"><span class="badge wait">Checking instant-buy availability…</span></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center">
+          <button class="btn buy-go-btn" id="buy-now-btn">Buy license — via offer</button>
+          <button class="btn ghost vote-btn${b.votedByMe ? ' voted' : ''}" id="vote-btn" data-vote-id="${esc(b.id || id)}" onclick="toggleVote(this,'${esc(b.id || id)}')" aria-label="Vote for this beat">▲ <span class="vote-count">${esc(b.votes?.totalWeight ?? 0)}</span></button>
+          <button class="btn ghost" id="share-btn">Share</button><span class="note" id="share-note"></span>
+        </div>
+      </div>
+      <div id="list-panel"></div>
       <div class="card" style="margin-top:16px">
         <h3 style="margin-bottom:10px">🔒 Provenance</h3>
         <p class="mono">${esc(b.fingerprint || 'no fingerprint recorded')}</p>
         <p style="margin-top:10px" id="chainline">${chainBadge(chain)}</p>
-      <div class="card" style="margin-top:16px">
+      </div>
         <h3 style="margin-bottom:10px">🎟️ NFT licenses</h3>
         <p id="nftline"><span class="badge wait">Checking…</span></p>
       </div>
@@ -79,7 +111,7 @@ async function load() {
             <label class="note"><input id="off-final" type="checkbox"> final (24h)</label>
             <button class="btn small" id="off-submit">Send offer</button>
           </div>
-          <p class="note" style="margin-top:6px">ETH is locked in the contract until accepted, rejected, cancelled, or expired.</p>
+          <p class="note" style="margin-top:6px" id="off-total">ETH is locked in the contract until accepted, rejected, cancelled, or expired. If accepted, the producer is paid the agreed price and any remainder is refunded — no platform fee is taken on offers.</p>
         </div>
         <div id="volt-nudge" style="display:none;margin-top:12px"></div>
       </div>
@@ -87,10 +119,63 @@ async function load() {
         <h3 style="margin-bottom:10px">📊 Card back</h3>
         <div id="cardback">${cardBack(b.stats)}</div>
       </div>
+      <div class="sticky-buy"><span data-price-eth="${esc(Number(b.price) || 0)}">${Flow.priceHtml(b)}</span><button class="btn buy-go-btn">Buy license</button></div>
+      <div id="chain-explainer"></div>
       <div class="mascot-says">
         <img src="assets/mascot-profile.webp" alt="">
         <div class="bubble">🦇 The fingerprint doesn't lie. If it's <b>verified</b>, this is the real audio.</div>
       </div>`;
+    Flow.refreshUsd(document.getElementById('beat'));
+    renderFeatureCard(b);
+    renderListCard();
+    // Share (money path, Nov 13): real beat/song URL, native sheet or copy.
+    const shareNote = document.getElementById('share-note');
+    const doShare = async () => {
+      try { if (shareNote) shareNote.textContent = await Flow.shareBeat(currentBeat); }
+      catch { if (shareNote) shareNote.textContent = 'Share failed — copy the link from the address bar instead.'; }
+    };
+    const shareBtn = document.getElementById('share-btn');
+    if (shareBtn) shareBtn.onclick = doShare;
+    const shareSongBtn = document.getElementById('share-song-btn');
+    if (shareSongBtn) shareSongBtn.onclick = doShare;
+    document.getElementById('chain-explainer').innerHTML = Flow.chainExplainerHtml();
+    // Deep links from feed cards (Flow.primaryCta, Grok Nov 13):
+    // #buy → buy panel, #offer → offer form (shown by loadOffers when
+    // the contracts are configured; otherwise scroll to the Offers card).
+    // #list → the producer's List for sale card.
+    if (location.hash === '#buy' || location.hash === '#offer' || location.hash === '#list') {
+      const target = document.getElementById(location.hash === '#buy' ? 'buy-panel' : location.hash === '#offer' ? 'make-offer' : 'list-panel');
+      if (target) setTimeout(() => target.scrollIntoView({ behavior: 'smooth', block: 'center' }), 600);
+    }
+    document.querySelectorAll('.buy-go-btn').forEach(btn => {
+      btn.onclick = () => {
+        if (directBuyReady) {
+          const panel = document.getElementById('buy-direct');
+          if (panel) { panel.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+          return;
+        }
+        const form = document.getElementById('make-offer');
+        if (form && window.VBEATS_NFT_ADDRESS && window.VBEATS_OFFERS_ADDRESS) {
+          form.style.display = '';
+          form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          const eth = document.getElementById('off-eth');
+          if (eth) eth.focus();
+        } else {
+          Volt.help('Offers go live when the contract deploys.');
+        }
+      };
+    });
+    // Live fee + total preview on the offer form.
+    const offEth = document.getElementById('off-eth');
+    const offTotal = document.getElementById('off-total');
+    if (offEth && offTotal) {
+      offEth.oninput = () => {
+        const v = Number(offEth.value);
+        offTotal.textContent = (isFinite(v) && v > 0)
+          ? 'Total locked: ' + v + ' ETH. If accepted, the producer is paid the agreed price and any remainder is refunded — no platform fee is taken.'
+          : 'ETH is locked in the contract until accepted, rejected, cancelled, or expired. If accepted, the producer is paid the agreed price and any remainder is refunded — no platform fee is taken.';
+      };
+    }
     // Fill in the producer's name from their public creator profile.
     api.publicProfile(b.userId).then(p => {
       const link = document.getElementById('producer-link');
@@ -116,6 +201,73 @@ async function load() {
     }
   } catch (e) { showErr('err', e.message); }
 }
+/* Feature / co-sign request (Nov 13): on a pending song, the singer
+   asks the parent beat's producer to feature it; the producer answers
+   right here. One pending request per song. A 404 means the old backend
+   — the card says so honestly instead of faking a send. */
+async function renderFeatureCard(b) {
+  const box = document.getElementById('feature-card');
+  if (!box || b.kind !== 'song' || b.coSignStatus !== 'pending') return;
+  const parentOwner = (b.parentBeat && b.parentBeat.userId) || null;
+  if (!api.loggedIn()) {
+    box.innerHTML = '<div class="card" style="margin-top:16px"><h3 style="margin-bottom:8px">🎤 Request feature</h3><p class="note">Sign in to ask the parent beat’s producer to feature this song.</p></div>';
+    return;
+  }
+  let me = null;
+  try { const p = await api.profile(); me = p && p.id; } catch { /* signed-out state */ }
+  if (me && me === parentOwner) {
+    box.innerHTML = '<div class="card" style="margin-top:16px"><h3 style="margin-bottom:8px">🎤 Feature request — your call</h3>' +
+      '<p class="note">This song raps over your beat and is waiting on you. Accepting puts it live in the feed; declining keeps it out.</p>' +
+      '<div style="display:flex;gap:8px;margin-top:10px"><button class="btn small" id="feat-accept">Accept — feature it</button>' +
+      '<button class="btn ghost small" id="feat-decline">Decline</button></div><p class="note" id="feat-note"></p></div>';
+    document.getElementById('feat-accept').onclick = async () => {
+      try { await api.coSign(b.id, 'approve'); location.reload(); }
+      catch (e) { document.getElementById('feat-note').textContent = e.message || String(e); }
+    };
+    document.getElementById('feat-decline').onclick = async () => {
+      try { await api.coSign(b.id, 'reject'); location.reload(); }
+      catch (e) { document.getElementById('feat-note').textContent = e.message || String(e); }
+    };
+    return;
+  }
+  if (me && me === b.userId) {
+    box.innerHTML = '<div class="card" style="margin-top:16px"><h3 style="margin-bottom:8px">🎤 Request feature</h3>' +
+      '<p class="note">Ask the parent beat’s producer to feature your song — that is what puts it live in the feed. One request at a time.</p>' +
+      '<p style="margin-top:10px"><button class="btn small" id="feat-send">Request feature</button></p><p class="note" id="feat-note"></p></div>';
+    let alreadySent = false;
+    try {
+      const sent = await api.featureSent();
+      alreadySent = ((sent && sent.requests) || []).some(r => r.songId === b.id && r.status === 'pending');
+    } catch (e) {
+      if (String(e.message || '').includes('404')) {
+        document.getElementById('feat-note').textContent = 'Feature requests need the latest backend — it has not landed yet, so this request cannot be sent right now.';
+        document.getElementById('feat-send').disabled = true;
+        return;
+      }
+      /* sent list failed for another reason — still allow the request;
+         the backend will refuse a duplicate. */
+    }
+    if (alreadySent) {
+      document.getElementById('feat-note').textContent = 'Request sent — awaiting the producer. You will see it go live here once they accept.';
+      document.getElementById('feat-send').disabled = true;
+      return;
+    }
+    document.getElementById('feat-send').onclick = async () => {
+      try {
+        await api.requestFeature(b.id);
+        document.getElementById('feat-note').textContent = 'Request sent — awaiting the producer. You will see it go live here once they accept.';
+        document.getElementById('feat-send').disabled = true;
+      } catch (e) {
+        document.getElementById('feat-note').textContent = String(e.message || '').includes('404')
+          ? 'Feature requests need the latest backend — it has not landed yet, so this request cannot be sent right now.'
+          : (e.message || String(e));
+      }
+    };
+    return;
+  }
+  box.innerHTML = '<div class="card" style="margin-top:16px"><h3 style="margin-bottom:8px">🎤 Request feature</h3><p class="note">This song is awaiting the parent beat’s producer — only the singer can request the feature, and only the producer can answer it.</p></div>';
+}
+
 function cardBack(s) {
   if (!s) return '<span class="badge wait">Stats loading…</span>';
   const rankLine = s.rankBySales <= s.rankedBeats
@@ -133,24 +285,339 @@ function chainBadge(c) {
   if (!c) return '<span class="badge wait">On-chain status unknown</span>';
   if (c.configured === false) return '<span class="badge wait">Not on-chain yet — contract not configured</span>';
   if (c.onChain) return `<span class="badge ok">✓ Registered on-chain</span>
-    ${c.owner ? `<p class="note">Owner <span class="mono">${esc(c.owner)}</span></p>` : ''}
-    ${c.registeredAt ? `<p class="note">Registered ${esc(c.registeredAt)}</p>` : ''}`;
+    ${c.owner ? `<p class="note">Owner ${Flow.explorerAddr(c.owner)}</p>` : ''}
+    ${c.registeredAt ? `<p class="note">Registered ${esc(c.registeredAt)}</p>` : ''}
+    <p class="note">Registry <a class="mono" href="https://basescan.org/address/${esc(window.VBEATS_REGISTRY_ADDRESS || '')}" target="_blank" rel="noopener">view contract on Basescan &rarr;</a></p>`;
   return '<span class="badge no">Fingerprint not registered on-chain</span>';
 }
+/* Producer listing (money path, Nov 13): the "List for sale" form the
+   site never had. Only the on-chain producer (wallet == registry owner)
+   sees it. It calls the real setPrice / stockForSale on BeatNFT — two
+   transactions per license type, price first, then stock — so the beat
+   becomes instantly buyable. Until a price AND stock are both set, the
+   buy panel keeps saying "via offer". No listing form exists anywhere
+   else; this is the one. */
+async function renderListCard() {
+  const box = document.getElementById('list-panel');
+  if (!box || !currentBeat || !currentBeat.fingerprint) return;
+  let producer = null;
+  try { producer = await api.producerOf(currentBeat.fingerprint); } catch {}
+  const me = (api.wallet || '').toLowerCase();
+  if (!me) {
+    box.innerHTML = '';
+    return;
+  }
+  if (!producer || me !== producer.toLowerCase()) return; // not the producer
+  let listing = null, configured = false;
+  try { const n = await api.nft(id); configured = !!n.configured; listing = n.listing || {}; } catch {}
+  const lease = listing && listing.lease;
+  const excl = listing && listing.exclusive;
+  const cur = [];
+  if (lease) cur.push('Lease ' + lease.priceEth + ' ETH · ' + lease.stock + ' in stock');
+  if (excl) cur.push('Exclusive ' + excl.priceEth + ' ETH');
+  let escrowList = [];
+  try { escrowList = await api.escrowListings(id); } catch { escrowList = []; }
+  const escLive = escrowList.length
+    ? 'Live via escrow: ' + escrowList.map(l => (l.exclusive ? 'Exclusive' : l.amount + ' lease' + (l.amount > 1 ? 's' : '')) + ' ' + l.priceEth + ' ETH · listing #' + l.listingId + ' · expires ' + new Date(l.expiresAt).toLocaleDateString()).join(' · ')
+    : 'No escrow listing yet.';
+  box.innerHTML = `<div class="card" style="margin-top:16px"><h3 style="margin-bottom:8px">🏷️ List for sale</h3>
+    <p class="note">You are the producer. New listings sell through escrow — the buyer pays on-chain, BeatEscrow takes the 5% platform fee at settlement and you get 95%.</p>
+    <p class="note" id="list-stake-note" style="margin-top:6px"></p>
+    <p class="note" style="margin-top:6px">${esc(escLive)}</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-top:12px">
+      <label class="note">Lease price (ETH each)<br><input id="list-esc-lease-eth" type="number" step="0.01" min="0" placeholder="0.005" style="width:100px"></label>
+      <label class="note">Leases in this lot<br><input id="list-esc-lease-stock" type="number" min="1" value="10" style="width:70px"></label>
+      <label class="note">Exclusive price (ETH, optional)<br><input id="list-esc-excl-eth" type="number" step="0.01" min="0" placeholder="0.05" style="width:100px"></label>
+      <label class="note">Listing lasts (days)<br><input id="list-esc-days" type="number" min="1" max="90" value="30" style="width:60px"></label>
+      <button class="btn" id="list-esc-go">List via escrow</button>
+    </div>
+    <p class="note" style="margin-top:8px">${Flow.feeNoteHtml('escrow')} The licenses move from your wallet into escrow until a verified buyer funds the sale — you need to hold the licenses in your wallet first (minted to you, not already stocked in BeatNFT for a direct sale).</p>
+    <p class="note" id="list-esc-note"></p>
+    <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--line)">
+      <h4 style="margin-bottom:6px">Legacy direct listing — no platform fee on this listing</h4>
+      <p class="note">The old path: set a price and stock licenses on the BeatNFT contract. The full listed price goes to you, but these sales predate the 5% fee and stay 0%-fee. Licenses stocked here cannot later move to escrow.</p>
+      <p class="note" style="margin-top:6px">${configured ? (cur.length ? 'Live now: ' + esc(cur.join(' · ')) : 'Not listed yet — no price or stock on-chain.') : 'The NFT contract is not configured, so listing is not available yet.'}</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-top:12px">
+        <label class="note">Lease price (ETH)<br><input id="list-lease-eth" type="number" step="0.01" min="0" placeholder="0.005" value="${lease ? esc(lease.priceEth) : ''}" style="width:100px"></label>
+        <label class="note">Leases in stock<br><input id="list-lease-stock" type="number" min="1" value="${lease ? esc(lease.stock) : '10'}" style="width:70px"></label>
+        <label class="note">Exclusive price (ETH, optional)<br><input id="list-excl-eth" type="number" step="0.01" min="0" placeholder="0.05" value="${excl ? esc(excl.priceEth) : ''}" style="width:100px"></label>
+        <button class="btn ghost" id="list-go">List direct (legacy)</button>
+      </div>
+      <p class="note" style="margin-top:8px">${Flow.feeNoteHtml('direct')} Listing takes two wallet confirmations per license type (set price, then stock).</p>
+      <p class="note" id="list-note"></p>
+    </div></div>`;
+  /* VBEATS staking (Nov 13, gate refined 23:34 CT): listing is
+     seller-side, so it takes a 1,000 VBEATS stake — soft copy only, the
+     List buttons are never blocked. Buying beats and voting stay open
+     to everyone; no stake required for either. */
+  const stakeNoteEl = document.getElementById('list-stake-note');
+  if (stakeNoteEl && api.passStake) {
+    api.passStake(me).then((s) => {
+      const note = Flow.stakeGateNoteHtml('Listing this beat for sale', s && s.isStaked);
+      stakeNoteEl.innerHTML = note ? note + ' <a href="profile.html#stake" style="color:var(--pur)">Stake 1,000 VBEATS to sell →</a>' : '';
+    }).catch(() => { stakeNoteEl.textContent = ''; });
+  }
+  const escGo = document.getElementById('list-esc-go');
+  const escNote = document.getElementById('list-esc-note');
+  escGo.onclick = async () => {
+    const leaseEth = document.getElementById('list-esc-lease-eth').value;
+    const leaseStock = document.getElementById('list-esc-lease-stock').value;
+    const exclEth = document.getElementById('list-esc-excl-eth').value;
+    const days = document.getElementById('list-esc-days').value;
+    const hasLease = leaseEth && Number(leaseEth) > 0;
+    const hasExcl = exclEth && Number(exclEth) > 0;
+    if (!hasLease && !hasExcl) { escNote.textContent = 'Enter a lease price or an exclusive price to list via escrow.'; return; }
+    const summary = (hasLease ? 'Lease ' + leaseEth + ' ETH × ' + (leaseStock || 1) + ' in the lot' : '') +
+      (hasLease && hasExcl ? ' · ' : '') + (hasExcl ? 'Exclusive ' + exclEth + ' ETH' : '') +
+      ' · ' + (days || 30) + ' days';
+    const ok = await confirmModal('List this beat via escrow for ' + summary + '? ' + Flow.feeNoteHtml('escrow'));
+    if (!ok) return;
+    escGo.disabled = true;
+    try {
+      const done = [];
+      if (hasLease) {
+        const r = await api.listOnEscrow(currentBeat.fingerprint, { priceEth: leaseEth, amount: leaseStock || 1, expiryDays: days || 30 });
+        done.push('leases → listing #' + r.listingId);
+        if (r.listingId != null) {
+          try {
+            await api.reportEscrowListing({
+              beatId: currentBeat.id, listingId: r.listingId, exclusive: false,
+              amount: r.amount, priceWei: r.priceWei,
+              expiresAt: new Date(Date.now() + (Number(days) || 30) * 86400 * 1000).toISOString(),
+            });
+          } catch (e) {
+            escNote.textContent = 'Listed on-chain as #' + r.listingId + ', but the backend registry could not save it (' + (e.message || e) + ') — the buy panel may not find it yet. Keep the listing number.';
+            await loadNft();
+            renderListCard();
+            return;
+          }
+        }
+      }
+      if (hasExcl) {
+        const r = await api.listOnEscrow(currentBeat.fingerprint, { exclusive: true, priceEth: exclEth, expiryDays: days || 30 });
+        done.push('exclusive → listing #' + r.listingId);
+        if (r.listingId != null) {
+          try {
+            await api.reportEscrowListing({
+              beatId: currentBeat.id, listingId: r.listingId, exclusive: true,
+              amount: 1, priceWei: r.priceWei,
+              expiresAt: new Date(Date.now() + (Number(days) || 30) * 86400 * 1000).toISOString(),
+            });
+          } catch (e) {
+            escNote.textContent = 'Listed on-chain as #' + r.listingId + ', but the backend registry could not save it (' + (e.message || e) + ') — the buy panel may not find it yet. Keep the listing number.';
+            await loadNft();
+            renderListCard();
+            return;
+          }
+        }
+      }
+      escNote.textContent = 'Listed via escrow — ' + done.join(' · ') + '. Instant buy is live now, with the 5% fee taken at settlement.';
+      await loadNft();
+      renderListCard();
+    } catch (e) {
+      escNote.textContent = e.message || String(e);
+    } finally { escGo.disabled = false; }
+  };
+  const go = document.getElementById('list-go');
+  const note = document.getElementById('list-note');
+  go.onclick = async () => {
+    const leaseEth = document.getElementById('list-lease-eth').value;
+    const leaseStock = document.getElementById('list-lease-stock').value;
+    const exclEth = document.getElementById('list-excl-eth').value;
+    const hasLease = leaseEth && Number(leaseEth) > 0;
+    const hasExcl = exclEth && Number(exclEth) > 0;
+    if (!hasLease && !hasExcl) { note.textContent = 'Enter a lease price or an exclusive price to list.'; return; }
+    const summary = (hasLease ? 'Lease ' + leaseEth + ' ETH × ' + (leaseStock || 1) + ' in stock' : '') +
+      (hasLease && hasExcl ? ' · ' : '') + (hasExcl ? 'Exclusive ' + exclEth + ' ETH' : '');
+    const ok = await confirmModal('List this beat direct (legacy, no platform fee) for ' + summary + '? ' + Flow.feeNoteHtml('direct'));
+    if (!ok) return;
+    go.disabled = true;
+    try {
+      const hashes = await api.listBeat(currentBeat.fingerprint, {
+        leasePriceEth: hasLease ? leaseEth : null,
+        leaseStock: hasLease ? leaseStock : null,
+        exclusivePriceEth: hasExcl ? exclEth : null,
+      });
+      note.textContent = 'Listed direct — ' + hashes.length + ' transaction' + (hashes.length > 1 ? 's' : '') + ' confirmed. Instant buy is live now (legacy, no fee).';
+      await loadNft();
+      renderListCard();
+    } catch (e) {
+      note.textContent = e.message || String(e);
+    } finally { go.disabled = false; }
+  };
+  if (location.hash === '#list') setTimeout(() => box.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
+}
+/* Buy lives or dies on the live listing — escrow first, direct legacy
+   second. Escrow: an active registry listing for the beat (found via
+   GET /v1/escrow-listings/by-beat/:id) — one tap funds + settles, 5%
+   fee taken on-chain, producer gets 95%. The buyer must be
+   Vouch-verified first, checked before any wallet pop-up. Direct: a
+   price > 0 AND stock on the BeatNFT contract — the legacy 0%-fee path.
+   - escrow for the chosen type → escrow buy, split preview.
+   - direct only → legacy direct buy, "no fees added".
+   - neither → the button stays "Buy license — via offer" and the panel
+     says why instant buy is not available. No fake mint button.
+   - chain down → the button becomes "Make offer" and the panel says the
+     chain is unreachable; offers still work. */
 async function loadNft() {
+  const buyEl = document.getElementById('buy-direct');
+  const buyBtn = document.getElementById('buy-now-btn');
   try {
     const n = await api.nft(id);
     const el = document.getElementById('nftline');
     if (!el) return;
     if (!n.configured) {
       el.innerHTML = '<span class="badge wait">NFT contract not deployed yet</span>';
+      if (buyEl) buyEl.innerHTML = '<p class="note">Instant buy is not available yet — the NFT contract is not deployed. You can still make an offer below.</p>';
+      if (buyBtn) buyBtn.textContent = 'Make offer';
       return;
     }
+    const royaltyPct = (n.royaltyBps != null ? (n.royaltyBps / 100) : 10);
     el.innerHTML = `<span class="badge ok">✓ Licenses live</span>
-      <p class="note" style="margin-top:8px">Contract <span class="mono">${esc(n.contract)}</span></p>
+      <p class="note" style="margin-top:8px">Contract <a class="mono" href="https://basescan.org/address/${esc(n.contract)}" target="_blank" rel="noopener">${esc(n.contract)} &rarr;</a></p>
       <p class="note">Token ID <span class="mono">${esc(n.tokenId)}</span></p>
-      <p class="note">ERC-1155 · lease editions + 1-of-1 exclusive · 10% producer royalty</p>`;
-  } catch { /* leave the "Checking…" badge */ }
+      <p class="note">ERC-1155 · lease editions + 1-of-1 exclusive · ${esc(royaltyPct)}% producer royalty on secondary sales</p>`;
+    const L = n.listing || {};
+    const leaseOk = L.lease && Number(L.lease.priceEth) > 0 && Number(L.lease.stock) >= 1;
+    const exclOk = L.exclusive && Number(L.exclusive.priceEth) > 0 && Number(L.exclusive.stock) >= 1;
+    // Escrow listings for this beat (registry; [] on old backend or
+    // when none exist — the panel then falls back to the direct listing).
+    let escrowList = [];
+    try { escrowList = await api.escrowListings(id); } catch { escrowList = []; }
+    const escrowFor = (exclusive) => escrowList.find(l => !!l.exclusive === !!exclusive && l.active) || null;
+    const escLease = escrowFor(false), escExcl = escrowFor(true);
+    const leasePath = escLease ? 'escrow' : (leaseOk ? 'direct' : null);
+    const exclPath = escExcl ? 'escrow' : (exclOk ? 'direct' : null);
+    if (!buyEl) return;
+    if (!leasePath && !exclPath) {
+      buyEl.innerHTML = '<p class="note">Instant buy is not available for this beat yet — the producer has not set a price or stocked licenses. You can still make an offer below, and the producer can accept it.</p>';
+      return;
+    }
+    directBuyReady = true;
+    const fmt = (x) => (Number(x) || 0) + ' ETH';
+    const typeLabel = (exclusive) => {
+      const path = exclusive ? exclPath : leasePath;
+      const esc = exclusive ? escExcl : escLease;
+      if (path === 'escrow') {
+        return (exclusive ? '1-of-1 exclusive' : esc.amount + ' lease' + (esc.amount > 1 ? 's' : '')) +
+          ' — via escrow · ' + fmt(esc.priceEth) + ' total';
+      }
+      const d = exclusive ? L.exclusive : L.lease;
+      return (exclusive ? '1-of-1 exclusive' : 'Lease') + ' — direct · ' + fmt(d.priceEth) +
+        (exclusive ? '' : ' each' + (Number(d.stock) > 1 ? ' · ' + esc(d.stock) + ' in stock' : ''));
+    };
+    let typeHtml = '';
+    if (leasePath && exclPath) {
+      typeHtml = `<label class="note" style="margin-right:12px"><input type="radio" name="buy-type" value="lease" checked> ${esc(typeLabel(false))}</label>
+        <label class="note"><input type="radio" name="buy-type" value="exclusive"> ${esc(typeLabel(true))}</label>`;
+    } else if (leasePath) {
+      typeHtml = `<p class="note">${esc(typeLabel(false))}</p><input type="hidden" name="buy-type" value="lease">`;
+    } else {
+      typeHtml = `<p class="note">${esc(typeLabel(true))}</p><input type="hidden" name="buy-type" value="exclusive">`;
+    }
+    buyEl.innerHTML = `<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end">
+        <span id="buy-types">${typeHtml}</span>
+        ${leasePath === 'direct' ? '<label class="note">Amount<br><input id="buy-amount" type="number" value="1" min="1" max="' + esc(L.lease.stock) + '" style="width:70px"></label>' : ''}
+        <button class="btn" id="buy-submit">Buy now</button>
+      </div>
+      <p class="note" style="margin-top:6px" id="buy-total"></p>
+      <p class="note" id="buy-fee-note"></p>
+      <p class="note" id="buy-vouch-note"></p>`;
+    const totalEl = document.getElementById('buy-total');
+    const feeNoteEl = document.getElementById('buy-fee-note');
+    const vouchNoteEl = document.getElementById('buy-vouch-note');
+    const submitBtn = document.getElementById('buy-submit');
+    const curType = () => {
+      const r = buyEl.querySelector('input[name="buy-type"]:checked') || buyEl.querySelector('input[name="buy-type"]');
+      return r ? r.value : 'lease';
+    };
+    const curPath = () => (curType() === 'exclusive' ? exclPath : leasePath);
+    const curEscrow = () => (curType() === 'exclusive' ? escExcl : escLease);
+    const curAmount = () => {
+      if (curPath() === 'escrow') return curEscrow().amount; // escrow sells the whole lot
+      const a = document.getElementById('buy-amount');
+      return curType() === 'exclusive' ? 1 : Math.max(1, Math.floor(Number(a && a.value) || 1));
+    };
+    const curPrice = () => {
+      const t = curType();
+      if (curPath() === 'escrow') return Number(curEscrow().priceEth); // total lot price
+      return t === 'exclusive' ? Number(L.exclusive.priceEth) : Number(L.lease.priceEth);
+    };
+    const refreshTotal = () => {
+      const total = curPath() === 'escrow' ? curPrice() : curPrice() * curAmount();
+      if (feeNoteEl) feeNoteEl.textContent = Flow.feeNoteHtml(curPath()) + ' Your wallet will ask you to confirm the exact total.';
+      if (curPath() === 'escrow') {
+        const s = Flow.feeSplit(total);
+        if (totalEl) totalEl.textContent = 'Total ' + s.total + ' ETH — producer gets ' + s.producer + ' ETH (95%), platform fee ' + s.fee + ' ETH (5%).';
+      } else {
+        if (totalEl) totalEl.textContent = 'Total: ' + total + ' ETH' + (curAmount() > 1 ? ' (' + curAmount() + ' × ' + curPrice() + ' ETH)' : '') + ' — no fees added.';
+      }
+      if (submitBtn) submitBtn.textContent = 'Buy now — ' + total + ' ETH';
+      if (buyBtn) buyBtn.textContent = 'Buy now — ' + total + ' ETH';
+    };
+    buyEl.addEventListener('change', refreshTotal);
+    buyEl.addEventListener('input', refreshTotal);
+    refreshTotal();
+    // Vouch pre-check for escrow buys: say plainly before any wallet
+    // pop-up when the buyer is not verified (vouching is studio-only).
+    if (curPath() === 'escrow' || escrowList.length) {
+      api.isVouched(api.wallet || '').then(function (ok) {
+        if (vouchNoteEl && !ok && api.wallet) {
+          vouchNoteEl.textContent = 'You are not Vouch-verified yet — escrow sales are for verified buyers only. Ask the studio to vouch your wallet before buying via escrow.';
+        }
+      }).catch(function () { /* vouch check failed — buyViaEscrow re-checks before funding */ });
+    }
+    submitBtn.onclick = async () => {
+      if (!api.loggedIn()) { Flow.signInModal('buy'); return; }
+      const exclusive = curType() === 'exclusive';
+      const amount = curAmount();
+      const path = curPath();
+      const totalEth = path === 'escrow' ? curPrice() : curPrice() * amount;
+      submitBtn.disabled = true;
+      try {
+        let hash, fundHash = null, channel = 'direct';
+        if (path === 'escrow') {
+          const esc = curEscrow();
+          if (api.wallet && !(await api.isVouched(api.wallet))) {
+            throw new Error('You are not Vouch-verified yet — escrow sales are for verified buyers only. Vouching is done by the studio (there is no self-serve vouch); ask the studio to vouch your wallet, then try again.');
+          }
+          const r = await api.buyViaEscrow(esc.listingId, esc.priceWei);
+          hash = r.settleHash;
+          fundHash = r.fundHash;
+          channel = 'escrow';
+        } else {
+          hash = await api.buyLicense(currentBeat.fingerprint, exclusive, amount);
+        }
+        // Record the purchase on the backend (best-effort — the on-chain
+        // tx is the proof either way). The receipt card below is shown
+        // regardless of whether the record call lands.
+        let recorded = null, recordNote = '';
+        try { recorded = await api.recordPurchase(currentBeat.id, hash, totalEth, exclusive ? 'exclusive' : 'lease', channel); }
+        catch (e) {
+          recordNote = String(e.message || '').includes('404')
+            ? 'Receipt could not be saved yet — the earnings backend has not landed, but your on-chain transaction is the proof.'
+            : 'Receipt could not be saved: ' + (e.message || e);
+        }
+        const split = channel === 'escrow' ? Flow.feeSplit(totalEth) : null;
+        if (buyEl) buyEl.innerHTML = '<p class="note">✅ License bought' + (channel === 'escrow' ? ' via escrow' : '') + ' — ' + Flow.explorerTx(hash) + '.</p>' +
+          (fundHash ? '<p class="note" style="margin-top:4px">Funded: ' + Flow.explorerTx(fundHash) + '</p>' : '') +
+          '<p class="note" style="margin-top:8px"><b>' + (exclusive ? '1-of-1 exclusive' : amount + ' lease' + (amount > 1 ? 's' : '')) + '</b> · ' + totalEth + ' ETH' +
+          (split ? ' · producer gets ' + split.producer + ' ETH (95%), platform fee ' + split.fee + ' ETH (5%)' : '') + ' · ' + Flow.feeNoteHtml(channel) + '</p>' +
+          '<p style="margin-top:12px"><a class="btn" href="' + esc(api.mediaUrl(currentBeat)) + '" download>⬇ Download your licensed audio</a></p>' +
+          '<p class="note" style="margin-top:8px">Re-download free anytime — Profile → My purchases. ' + (recorded ? 'Receipt saved' + (recorded.status === 'pending' ? ' (pending on-chain confirmation)' : '') + '.' : esc(recordNote)) + '</p>' +
+          '<p style="margin-top:10px"><a class="btn ghost small" href="profile.html">View my purchases</a> <a class="btn ghost small" href="beat.html?id=' + esc(currentBeat.id) + '">Back to the beat</a></p>';
+        directBuyReady = false;
+        if (buyBtn) buyBtn.textContent = 'Buy license — via offer';
+      } catch (e) {
+        alert(e.message || e);
+      } finally { submitBtn.disabled = false; }
+    };
+  } catch {
+    // Chain down (or backend down): instant buy is paused, offers still
+    // work — the button becomes "Make offer" instead of a dead Buy now.
+    if (buyEl) buyEl.innerHTML = '<p class="note">Could not check instant-buy availability — the Base chain or the listing service is unreachable right now. You can still make an offer below, and the producer can accept it.</p>';
+    if (buyBtn) buyBtn.textContent = 'Make offer';
+  }
 }
 async function loadOffers() {
   const el = document.getElementById('offers');
@@ -229,12 +696,52 @@ async function loadOffers() {
   } catch { el.innerHTML = '<span class="badge wait">Could not load offers</span>'; }
 }
 
+/* Offer inputs used to be prompt() / confirm() pop-ups. They are now proper
+   modals with a fee + total preview — a wallet pop-up should never be the
+   first time you see what you're about to spend. */
+function confirmModal(msg) {
+  return new Promise(resolve => {
+    const m = Flow.openModal(
+      '<h3>Are you sure?</h3><p>' + esc(msg) + '</p>' +
+      '<div style="display:flex;gap:8px;margin-top:14px">' +
+      '<button class="btn" id="flow-ok">Yes, do it</button>' +
+      '<button class="btn ghost" id="flow-cancel">Cancel</button></div>');
+    m.querySelector('#flow-ok').onclick = () => { Flow.closeModal(); resolve(true); };
+    m.querySelector('#flow-cancel').onclick = () => { Flow.closeModal(); resolve(false); };
+  });
+}
+function askEthModal(title, label, def) {
+  return new Promise((resolve, reject) => {
+    const m = Flow.openModal(
+      '<h3>' + esc(title) + '</h3>' +
+      '<div class="field"><label>' + esc(label) + '</label>' +
+      '<input id="flow-eth" type="number" step="0.01" min="0" value="' + esc(def || '') + '"></div>' +
+      '<p class="note" id="flow-eth-total"></p>' +
+      '<div style="display:flex;gap:8px;margin-top:14px">' +
+      '<button class="btn" id="flow-ok">Continue</button>' +
+      '<button class="btn ghost" id="flow-cancel">Cancel</button></div>');
+    const input = m.querySelector('#flow-eth');
+    const total = m.querySelector('#flow-eth-total');
+    const update = () => {
+      const v = Number(input.value);
+      total.textContent = (isFinite(v) && v > 0)
+        ? 'Total locked: ' + v + ' ETH. If accepted, the producer is paid the agreed price and any remainder is refunded — no platform fee is taken.'
+        : 'Enter an amount in ETH.';
+    };
+    input.oninput = update; update();
+    input.focus();
+    m.querySelector('#flow-ok').onclick = () => {
+      const v = input.value;
+      const n = Number(v);
+      if (!isFinite(n) || n <= 0) { update(); return; }
+      Flow.closeModal(); resolve(v);
+    };
+    m.querySelector('#flow-cancel').onclick = () => { Flow.closeModal(); reject({ cancelled: true }); };
+  });
+}
 function askEth(msg, def) {
-  const v = prompt(msg, def || '');
-  if (v === null) throw { cancelled: true };
-  const n = Number(v);
-  if (!isFinite(n) || n <= 0) throw new Error('Enter an amount in ETH');
-  return v;
+  // Kept as the single entry point: title is the question, label is ETH.
+  return askEthModal('Make an offer', msg, def);
 }
 
 async function offerAction(act, offerId, btn) {
@@ -256,17 +763,17 @@ async function offerAction(act, offerId, btn) {
   try {
     switch (act) {
       case 'raise': {
-        const v = askEth('Raise your bid by how much (ETH)?');
+        const v = await askEth('Raise your bid by how much (ETH)?');
         await done(() => api.offerTx('raiseOffer', [offerId], ethers.parseEther(v)));
         break;
       }
       case 'lower': {
-        const v = askEth(`Lower your bid to how much (ETH)? Current: ${o.bidEth}`);
+        const v = await askEth(`Lower your bid to how much (ETH)? Current: ${o.bidEth}`);
         await done(() => api.offerTx('lowerOffer', [offerId, ethers.parseEther(v)]));
         break;
       }
       case 'final':
-        if (!confirm('Make this FINAL? Take-it-or-leave-it, 24-hour fuse.')) break;
+        if (!(await confirmModal('Make this FINAL? Take-it-or-leave-it, 24-hour fuse.'))) break;
         await done(() => api.offerTx('markBidFinal', [offerId]));
         break;
       case 'acceptAsk': {
@@ -275,20 +782,20 @@ async function offerAction(act, offerId, btn) {
         break;
       }
       case 'cancel':
-        if (!confirm('Cancel your offer? Your ETH is refunded.')) break;
+        if (!(await confirmModal('Cancel your offer? Your ETH is refunded.'))) break;
         await done(() => api.offerTx('cancelOffer', [offerId]));
         break;
       case 'accept':
-        if (!confirm(`Accept ${o.bidEth} ETH for ${o.exclusive ? 'the 1-of-1 exclusive' : o.amount + ' leases'}?`)) break;
+        if (!(await confirmModal(`Accept ${o.bidEth} ETH for ${o.exclusive ? 'the 1-of-1 exclusive' : o.amount + ' leases'}?`))) break;
         await done(() => api.offerTx('acceptOffer', [offerId]));
         break;
       case 'counter': {
-        const v = askEth(`Your counter-ask (ETH)? Their bid: ${o.bidEth}`);
+        const v = await askEth(`Your counter-ask (ETH)? Their bid: ${o.bidEth}`);
         await done(() => api.offerTx('counterOffer', [offerId, ethers.parseEther(v)]));
         break;
       }
       case 'counterFinal': {
-        const v = askEth(`Your FINAL ask (ETH)? 24-hour fuse. Their bid: ${o.bidEth}`);
+        const v = await askEth(`Your FINAL ask (ETH)? 24-hour fuse. Their bid: ${o.bidEth}`);
         await done(() => api.offerTx('counterFinal', [offerId, ethers.parseEther(v)]));
         break;
       }
@@ -296,7 +803,7 @@ async function offerAction(act, offerId, btn) {
         await done(() => api.offerTx('withdrawAsk', [offerId]));
         break;
       case 'reject':
-        if (!confirm('Reject this offer? Their ETH is refunded.')) break;
+        if (!(await confirmModal('Reject this offer? Their ETH is refunded.'))) break;
         await done(() => api.offerTx('rejectOffer', [offerId]));
         break;
     }

@@ -27,6 +27,7 @@
 <footer class="footer"><div class="footer-bat"><img src="assets/mascot-profile.webp" alt=""></div>Verified Beats Studio — Volt keeps the receipts.</footer>
 
 <script src="js/api.js"></script>
+<script src="js/flow.js"></script>
 <script src="js/volt.js"></script>
 <script>
 nav('creator.html');
@@ -34,10 +35,7 @@ nav('creator.html');
 const u = new URLSearchParams(location.search).get('u') || '';
 
 async function toggleVote(btn, id) {
-  if (!api.loggedIn()) {
-    if (confirm('Sign in to vote — head to the sign-in page?')) location.href = 'upload.html';
-    return;
-  }
+  if (!api.loggedIn()) { Flow.signInModal('vote'); return; }
   try {
     btn.disabled = true;
     const r = await api.vote(id);
@@ -49,21 +47,8 @@ async function toggleVote(btn, id) {
 }
 
 function beatRow(b) {
-  return `<article class="post" style="margin-bottom:14px">
-    <div class="post-head">
-      <img src="${esc(api.artUrl(b))}" alt="">
-      <div>
-        <div class="who"><a href="beat.html?id=${esc(b.id)}" style="color:inherit">${esc(b.title)}</a>${b.isHouse ? ' <span class="house-tag">🏠 House beat</span>' : ''}</div>
-        <div class="sub">${esc(b.genre)}${b.bpm ? ' · ' + esc(b.bpm) + ' BPM' : ''}${b.duration || b.dur ? ' · ' + fmtDur(b.duration || b.dur) : ''}</div>
-      </div>
-      <span class="chip">✓ VERIFIED ON-CHAIN</span>
-    </div>
-    <div class="post-body"><div class="post-actions">
-      <button class="btn small ghost vote-btn${b.votedByMe ? ' voted' : ''}" onclick="toggleVote(this,'${esc(b.id)}')" aria-label="Vote for this beat">▲ <span class="vote-count">${esc(b.votes?.totalWeight ?? 0)}</span></button>
-      <span class="price">$${esc(b.price)}</span>
-      <a class="btn small" href="beat.html?id=${esc(b.id)}">Lease / Mint</a>
-    </div></div>
-  </article>`;
+  // Same unified card as the feed and marketplace.
+  return Flow.beatCard(b);
 }
 
 async function load() {
@@ -92,12 +77,21 @@ async function load() {
     document.getElementById('creator-beats').innerHTML = beats.length
       ? beats.map(beatRow).join('')
       : '<p class="note">No beats yet.</p>';
+    Flow.wireCardMenus(document.getElementById('creator-beats'));
+    Flow.refreshUsd(document.getElementById('creator-beats'));
+    Flow.verifyCards(document.getElementById('creator-beats')); // lazy on-chain proof as cards scroll into view
   } catch (e) {
     showErr('err', e.message || 'Creator not found.');
     document.getElementById('creator-head').innerHTML = '';
     document.getElementById('creator-beats').innerHTML = '';
   }
 }
+document.getElementById('creator-beats').addEventListener('click', e => {
+  const playBtn = e.target.closest('[data-play-id]');
+  if (playBtn) { Flow.play(playBtn.getAttribute('data-play-url'), playBtn.getAttribute('data-play-title'), playBtn); return; }
+  const voteBtn = e.target.closest('[data-vote-id]');
+  if (voteBtn) toggleVote(voteBtn, voteBtn.getAttribute('data-vote-id'));
+});
 load();
 </script>
 </body>
