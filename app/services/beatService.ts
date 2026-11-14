@@ -48,6 +48,8 @@ export interface Transaction {
   status: 'completed' | 'pending' | string;
   txHash?: string | null;
   licenseKind?: string | null;
+  channel?: string | null;
+  feeEth?: number | null;
   createdAt: string;
   beat?: Beat | null;
 }
@@ -55,8 +57,14 @@ export interface Transaction {
 export interface Dashboard {
   beatsCount: number;
   earningsEth: number;
+  // Escrow fee (Nov 13): earningsEth is the producer NET (gross minus
+  // the 5% fee on escrow sales). grossEth / feeEth are present only on
+  // the new backend — callers fall back to the old single number when
+  // they are absent, never inventing a split.
+  grossEth?: number;
+  feeEth?: number;
   salesCount: number;
-  perBeat: Array<{ beatId: string; title: string; sales: number; eth: number }>;
+  perBeat: Array<{ beatId: string; title: string; sales: number; eth: number; feeEth?: number; grossEth?: number }>;
   purchases: Transaction[];
   pendingOffers: Array<{
     beatId: string; beatTitle: string; offerId: string; bidEth: string;
@@ -85,6 +93,83 @@ export async function getDashboard(): Promise<Dashboard> {
   };
 }
 
+/** VBEATS membership (Nov 13): real balance on Robinhood Chain + Volt
+ * Pass state, from the backend. Null on any failure — callers hide the
+ * card rather than inventing a balance or a member badge. Buys stay ETH;
+ * VBEATS is membership only. */
+export interface PassEligibility {
+  configured: boolean;
+  balance: string;
+  balanceFormatted: string;
+  threshold: string;
+  eligible: boolean;
+  hasPass: boolean;
+  memberNumber: number | null;
+  // VBEATS staking (Nov 13): a staker counts as a member. Present only
+  // on the new backend — callers treat absence as "unknown", never as
+  // staked or not staked. Namespaced so they never collide with the
+  // holding's `configured`.
+  stakeConfigured?: boolean;
+  isStaked?: boolean;
+  staked?: string;
+  stakedFormatted?: string;
+  stakeRequired?: string;
+}
+
+export async function getPassEligibility(address: string): Promise<PassEligibility | null> {
+  try {
+    return await apiRequest<PassEligibility>(`/pass/eligibility/${address}`);
+  } catch {
+    return null;
+  }
+}
+
+/** VBEATS stake status (Nov 13): 1,000 VBEATS staked unlocks selling
+ * only (listing, Make a song, producer dashboard). Buying in ETH and
+ * voting stay open to everyone — no stake required for either.
+ * configured=false means the stake contract is not deployed yet —
+ * staking is not live. Null on any failure — callers hide the stake
+ * card rather than inventing a stake. Stake/unstake themselves happen
+ * on the web (claim page) — mobile never fakes the tx. */
+export interface StakeStatus {
+  configured: boolean;
+  staked: string;
+  stakedFormatted: string;
+  isStaked: boolean;
+  required: string;
+}
+
+export async function getPassStake(address: string): Promise<StakeStatus | null> {
+  try {
+    return await apiRequest<StakeStatus>(`/pass/stake/${address}`);
+  } catch {
+    return null;
+  }
+}
+
+export interface PassMe {
+  hasPass: boolean;
+  memberNumber: number | null;
+  bat: string | null;
+  claimedAt: string | null;
+  showcaseUnlocked: boolean;
+  members: number;
+  memberGoal: number;
+  // VBEATS staking (Nov 13): additive, new backend only.
+  stakeConfigured?: boolean;
+  isStaked?: boolean;
+  stakedFormatted?: string;
+  stakeRequired?: string;
+}
+
+export async function getPassMe(address: string): Promise<PassMe | null> {
+  try {
+    return await apiRequest<PassMe>(`/pass/me/${address}`);
+  } catch {
+    return null;
+  }
+}
+
 export async function listTransactions(): Promise<Transaction[]> {
   const res = await apiRequest<{ transactions: Transaction[] }>('/transactions', {
     requiresAuth: true,
@@ -97,19 +182,22 @@ export async function listTransactions(): Promise<Transaction[]> {
 
 /**
  * Record an on-chain license purchase (money path, Nov 13): called right
- * after BeatNFT.buy() mines, with the tx hash as the receipt. The
- * backend checks the receipt on Base when it can; a row it cannot check
- * yet comes back 'pending', never faked as completed.
+ * after BeatNFT.buy() mines, with the tx hash as the receipt — or right
+ * after BeatEscrow.settle() mines, with channel 'escrow' and the settle
+ * tx hash (the 5% fee is taken on-chain at settlement). The backend
+ * checks the receipt on Base when it can; a row it cannot check yet
+ * comes back 'pending', never faked as completed.
  */
 export async function recordPurchase(
   beatId: string,
   txHash: string,
   amountEth: number,
-  licenseKind: 'lease' | 'exclusive'
+  licenseKind: 'lease' | 'exclusive',
+  channel?: 'direct' | 'escrow'
 ): Promise<Transaction> {
   return apiRequest<Transaction>('/transactions', {
     method: 'POST',
-    body: { beatId, txHash, amountEth, licenseKind },
+    body: { beatId, txHash, amountEth, licenseKind, channel: channel || 'direct' },
     requiresAuth: true,
   });
 }

@@ -1,6 +1,7 @@
 import { prisma } from '../db';
 import {
   checkHolding as defaultCheckHolding,
+  checkStake as defaultCheckStake,
   getPassState as defaultGetPassState,
 } from './passService';
 
@@ -10,7 +11,10 @@ import {
 // A vote's weight is snapshotted at vote time from the voter's wallet:
 //   3 — Volt Pass holder (VoltPass on Base, via passService.getPassState)
 //   2 — VBEATS holder at/above the pass threshold (Robinhood Chain,
-//       via passService.checkHolding)
+//       via passService.checkHolding) OR a VBEATS staker (1,000 VBEATS
+//       staked in VbeatsStaking — a staker counts as a member, and their
+//       wallet balance drops when they stake, so the holding check alone
+//       would wrongly drop them to weight 1)
 //   1 — everyone else (including voters with no wallet)
 // Chain reads are best-effort: any failure warns and degrades gracefully,
 // and computeVoteWeight NEVER throws.
@@ -19,18 +23,20 @@ import {
 export interface VoteWeightReaders {
   getPassState: typeof defaultGetPassState;
   checkHolding: typeof defaultCheckHolding;
+  checkStake: typeof defaultCheckStake;
 }
 
 /**
  * Pure weight decision — separable so it can be unit-tested without any
- * chain access. Pass beats holding; holding beats plain.
+ * chain access. Pass beats holding/stake; holding or stake beats plain.
  */
 export function decideWeight(input: {
   hasPass: boolean;
   eligible: boolean;
+  isStaked?: boolean;
 }): number {
   if (input.hasPass) return 3;
-  if (input.eligible) return 2;
+  if (input.eligible || input.isStaked) return 2;
   return 1;
 }
 
@@ -41,6 +47,7 @@ export async function computeVoteWeight(
   if (!walletAddress) return 1;
   const getPassState = readers.getPassState ?? defaultGetPassState;
   const checkHolding = readers.checkHolding ?? defaultCheckHolding;
+  const checkStake = readers.checkStake ?? defaultCheckStake;
 
   let hasPass = false;
   try {
@@ -64,7 +71,17 @@ export async function computeVoteWeight(
       err instanceof Error ? err.message : err
     );
   }
-  return decideWeight({ hasPass: false, eligible });
+  let isStaked = false;
+  try {
+    const stake = await checkStake(walletAddress);
+    isStaked = Boolean(stake?.isStaked);
+  } catch (err) {
+    console.warn(
+      '[votes] checkStake failed, falling back to holding weight:',
+      err instanceof Error ? err.message : err
+    );
+  }
+  return decideWeight({ hasPass: false, eligible, isStaked });
 }
 
 // ---------------------------------------------------------------------------

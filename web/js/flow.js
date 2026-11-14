@@ -197,20 +197,51 @@
     return { label: 'Make offer', href: 'beat.html?id=' + encodeURIComponent(id) + '#offer', anchor: 'offer' };
   }
 
-  /* ---------- platform fee (money path, Nov 13) ---------------------------
-     The fee is NOT set yet (Star's call: add a fee to the contract, accept
-     0% on direct buys, or route via escrow). Until then the full listed
-     price goes to the producer — this note says exactly that, everywhere
-     money moves, and never implies a fee is being taken. */
-  function feeNoteHtml() {
+  /* ---------- platform fee (5%, set Nov 13 — Star: "5% is the fee") -------
+     Enforced on-chain by BeatEscrow at settlement (500 bps, treasury =
+     the studio wallet). New listings sell through escrow and the
+     producer gets 95% of the listed price. Direct BeatNFT.buy() cannot
+     take a fee without a redeploy, so direct listings are legacy 0%-fee
+     sales. feeNoteHtml(path) is path-aware: 'escrow' (the default) is
+     the 5% copy, 'direct' is the legacy copy. Old hook values (bps 0 /
+     'undecided') still render honestly if the hook is ever rolled back. */
+  function feeNoteHtml(path) {
     var fee = window.VBEATS_PLATFORM_FEE || { bps: 0, status: 'undecided' };
-    if (fee.status === 'undecided') {
-      return 'Platform fee: not set yet — the full listed price goes to the producer. No fee is taken on direct buys until the fee is decided.';
+    if (!fee.bps || fee.status === 'undecided') {
+      return 'Platform fee: 5% — the producer gets 95% of the listed price. (The fee is set; this note fell back because the fee hook could not be read — BeatEscrow still enforces 5% on-chain at settlement.)';
     }
-    if (fee.bps > 0) {
-      return 'Platform fee: ' + (fee.bps / 100) + '% — the rest of the listed price goes to the producer.';
+    if (path === 'direct') {
+      return 'Direct sale — this listing predates the 5% fee: the full listed price goes to the producer. New listings sell through escrow with the 5% fee.';
     }
-    return 'Platform fee: 0% on direct buys — the full listed price goes to the producer.';
+    return '5% platform fee — the producer gets 95% of the listed price. The fee goes to the Verified Beats treasury on-chain, taken by BeatEscrow at settlement.';
+  }
+
+  /* 5% split of a listed total, in ETH: { total, producer, fee }.
+     Rounded to 6 decimals so the buy panel never shows a long tail. */
+  function feeSplit(totalEth) {
+    var total = Number(totalEth) || 0;
+    var round6 = function (x) { return Math.round(x * 1e6) / 1e6; };
+    var fee = round6(total * 0.05);
+    return { total: round6(total), producer: round6(total - fee), fee: fee };
+  }
+
+  /* ---------- VBEATS staking (Nov 13 — Star: "1,000 VBEATS") ----------
+     Stake 1,000 VBEATS to SELL: listing beats for sale, making songs,
+     the producer dashboard and the feature inbox. The free studio stays
+     free, buying beats in ETH stays open to everyone, and voting keeps
+     its existing hold-based weights — no stake required to vote or buy.
+     SOFT copy only: nothing is ever hard-blocked — the contract is not
+     deployed yet, so the money path must keep working.
+     stakeGateNoteHtml(feature, staked) renders:
+       - not deployed: "goes live after the stake contract is deployed"
+       - not staked: "Stake 1,000 VBEATS to sell …"
+       - staked: '' (nothing to say — selling is unlocked) */
+  function stakeGateNoteHtml(feature, staked) {
+    if (staked) return '';
+    if (!window.VBEATS_STAKE_ADDRESS) {
+      return '🔒 ' + feature + ' — selling takes a 1,000 VBEATS stake. Staking goes live after the stake contract is deployed — nothing is blocked until then.';
+    }
+    return '🔒 Stake 1,000 VBEATS to sell — ' + feature + '. Unstake any time — the full 1,000 VBEATS comes back. No lockup, no yield — the access is the reward.';
   }
 
   /* ---------- Make-a-song (Nov 13) -----------------------------------------
@@ -477,7 +508,15 @@
     var bat = api.bat ? batById(api.bat) : null;
     if (!w) return '<button class="btn small" id="wallet-btn">Connect wallet</button>';
     var dot = bat ? '<span class="bat-dot" style="background:' + bat.color + ';width:22px;height:22px;font-size:11px;margin:0 4px 0 0;vertical-align:-6px">' + bat.name[0] + '</span>' : '';
-    return dot + '<button class="btn ghost small" id="wallet-btn" title="' + esc(w) + ' — tap to disconnect">' + esc(w.slice(0, 6)) + '&hellip;' + esc(w.slice(-4)) + '</button>';
+    // VBEATS membership pill (Nov 13): read from the cache api.js fills
+    // via /v1/pass/eligibility/ — never a balance that wasn't returned.
+    var m = window.__vbeatsMember;
+    var pill = '';
+    if (m && m.configured !== false) {
+      if (m.hasPass) pill = '<a class="member-pill" href="profile.html" title="Volt Pass member">🦇 Member #' + esc(m.memberNumber || '') + '</a>';
+      else if (Number(m.balanceFormatted || 0) > 0) pill = '<a class="member-pill" href="claim.html" title="VBEATS balance — claim your Volt Pass at 10 VBEATS">' + esc(m.balanceFormatted) + ' VBEATS</a>';
+    }
+    return dot + pill + '<button class="btn ghost small" id="wallet-btn" title="' + esc(w) + ' — tap to disconnect">' + esc(w.slice(0, 6)) + '&hellip;' + esc(w.slice(-4)) + '</button>';
   }
   function refreshWalletChip() {
     var box = document.getElementById('nav-user');
@@ -499,7 +538,8 @@
     weekScore: weekScore, sortWeekly: sortWeekly, weeklyActiveCount: weeklyActiveCount,
     verifyChip: verifyChip, verifyCards: verifyCards, explorerAddr: explorerAddr, explorerTx: explorerTx,
     chainExplainerHtml: chainExplainerHtml,
-    primaryCta: primaryCta, feeNoteHtml: feeNoteHtml, shareBeat: shareBeat,
+    primaryCta: primaryCta, feeNoteHtml: feeNoteHtml, feeSplit: feeSplit, shareBeat: shareBeat,
+    stakeGateNoteHtml: stakeGateNoteHtml,
     isSong: isSong, songOverLabel: songOverLabel, songCta: songCta, coSignChip: coSignChip,
     beatCard: beatCard, wireCardMenus: wireCardMenus,
     openModal: openModal, closeModal: closeModal,

@@ -69,6 +69,11 @@
     <div id="claim-body"><p class="note">Checking claim status…</p></div>
   </div>
 
+  <div class="card" style="margin-top:16px" id="stake-card">
+    <h3 style="margin-bottom:6px">🔒 Stake 1,000 VBEATS to sell</h3>
+    <div id="stake-body"><p class="note">Checking stake status…</p></div>
+  </div>
+
   <div class="card" style="margin-top:16px">
     <h3 style="margin-bottom:10px">What the pass gets you</h3>
     <p>⚡ <b>Early upload access</b> — producers with the pass upload before the public launch.</p>
@@ -151,8 +156,10 @@ async function renderClaim() {
     body.innerHTML = '<p class="note">Connect the wallet that holds your VBEATS. The pass mints to that same address on Base — no gas, no transaction on your side, just one signature to prove the wallet is yours.</p>' +
       '<div style="margin-top:12px"><button class="btn" id="connect">Connect wallet</button></div>';
     document.getElementById('connect').onclick = connect;
+    document.getElementById('stake-body').innerHTML = '<p class="note">Connect a wallet to see your stake.</p>';
     return;
   }
+  renderStake();
   body.innerHTML = '<p class="note">Connected: <span class="mono">' + address + '</span> — checking…</p>';
   const { me, elig } = await walletState();
   if (me && me.hasPass) {
@@ -202,6 +209,79 @@ async function renderClaim() {
   };
   const claimBtn = document.getElementById('claim');
   if (claimBtn) claimBtn.onclick = doClaim;
+}
+
+/* VBEATS staking (Nov 13): stake exactly 1,000 VBEATS to sell —
+   listing beats for sale, making songs, the producer dashboard and
+   the feature inbox. The studio stays free, and buying beats in ETH
+   stays open to everyone. Unstake returns the full 1,000: no lockup,
+   no slashing, no yield. While the stake contract is undeployed there
+   is NO live Stake button — the card says plainly that staking goes
+   live after the contract is deployed. Balances come from the backend
+   only. */
+async function renderStake() {
+  const body = document.getElementById('stake-body');
+  if (!body) return;
+  try {
+    const [stake, elig] = await Promise.all([
+      apiGet('/v1/pass/stake/' + address).catch(() => null),
+      apiGet('/v1/pass/eligibility/' + address).catch(() => null),
+    ]);
+    const bal = elig ? elig.balanceFormatted : null;
+    if (!stake) {
+      body.innerHTML = '<p class="note">Stake status is waking up — refresh in a few seconds.</p>';
+      return;
+    }
+    if (stake.isStaked) {
+      body.innerHTML = '<p style="font-size:18px"><b>✅ Staked — ' + esc(stake.stakedFormatted) + ' VBEATS</b></p>' +
+        '<p class="note" style="margin-top:6px">Selling is unlocked: listing beats for sale, making songs, the producer dashboard and the feature inbox. Unstake any time and the full 1,000 VBEATS comes back — no lockup, no fee.</p>' +
+        '<div style="margin-top:12px"><button class="btn ghost" id="unstake">Unstake — return my 1,000 VBEATS</button> <span class="note" id="stake-note"></span></div>';
+      document.getElementById('unstake').onclick = async () => {
+        const note = document.getElementById('stake-note');
+        const btn = document.getElementById('unstake');
+        try {
+          btn.disabled = true; btn.textContent = 'Check your wallet…';
+          if (note) note.textContent = ' One confirmation — your full 1,000 VBEATS comes back.';
+          await api.unstakeVbeats();
+          renderStake();
+        } catch (e) {
+          if (note) note.textContent = ' ' + (e.message || String(e));
+          btn.disabled = false; btn.textContent = 'Unstake — return my 1,000 VBEATS';
+        }
+      };
+      return;
+    }
+    const balLine = bal != null
+      ? '<p>Your VBEATS balance: <b>' + esc(bal) + '</b> — the stake needs <b>1,000</b>.</p>'
+      : '';
+    if (!stake.configured) {
+      body.innerHTML = balLine +
+        '<p style="margin-top:6px"><b>Staking goes live after the stake contract is deployed.</b></p>' +
+        '<p class="note" style="margin-top:6px">Stake exactly 1,000 VBEATS to sell: listing beats for sale, making songs, the producer dashboard and the feature inbox. The studio stays free, and buying beats in ETH stays open to everyone — the stake is only required to sell. Unstake any time and the full 1,000 VBEATS comes back. No lockup, no yield — the access is the reward. Nothing is blocked until staking goes live.</p>';
+      return;
+    }
+    const short = bal != null && Number(bal) < 1000;
+    body.innerHTML = balLine +
+      (short
+        ? '<p class="note" style="margin-top:6px">You need 1,000 VBEATS to stake — top up on Pons first, then come back. Staking takes two wallet confirmations: approve 1,000 VBEATS, then stake.</p>'
+        : '<p class="note" style="margin-top:6px">You\u2019re ready to stake. Two wallet confirmations: approve 1,000 VBEATS, then stake. Unstake any time — the full 1,000 comes back.</p>') +
+      '<div style="margin-top:12px"><button class="btn" id="stake"' + (short ? ' disabled' : '') + '>Stake 1,000 VBEATS</button> <span class="note" id="stake-note"></span></div>';
+    const btn = document.getElementById('stake');
+    if (btn) btn.onclick = async () => {
+      const note = document.getElementById('stake-note');
+      try {
+        btn.disabled = true; btn.textContent = 'Check your wallet…';
+        if (note) note.textContent = ' Two confirmations: approve, then stake.';
+        await api.stakeVbeats();
+        renderStake();
+      } catch (e) {
+        if (note) note.textContent = ' ' + (e.message || String(e));
+        btn.disabled = false; btn.textContent = 'Stake 1,000 VBEATS';
+      }
+    };
+  } catch {
+    body.innerHTML = '<p class="note">Stake status is waking up — refresh in a few seconds.</p>';
+  }
 }
 
 async function connect() {

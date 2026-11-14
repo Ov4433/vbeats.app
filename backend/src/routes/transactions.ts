@@ -21,6 +21,7 @@ router.post('/', validateBody(z.object({
   amountEth: z.number().positive().optional(),
   amount: z.number().positive().optional(),
   licenseKind: z.string().optional(),
+  channel: z.string().optional(),
 }).passthrough()), recordPurchase);
 router.get('/dashboard', getDashboard);
 

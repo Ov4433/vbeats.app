@@ -15,6 +15,7 @@ import webhooksRoutes from './routes/webhooks';
 import chatRoutes from './routes/chat';
 import passRoutes from './routes/pass';
 import featuresRoutes from './routes/features';
+import escrowListingsRoutes from './routes/escrowListings';
 
 export function createApp() {
   const app = express();
@@ -55,6 +56,7 @@ export function createApp() {
   app.use('/v1/chat', chatRoutes);
   app.use('/v1/pass', passRoutes);
   app.use('/v1/features', featuresRoutes);
+  app.use('/v1/escrow-listings', escrowListingsRoutes);
 
   app.use(notFound);
   app.use(errorHandler);

@@ -458,6 +458,9 @@ export default function MakeSongScreen({ route, navigation }: any) {
         <Text style={styles.note}>
           Songs are not sold here — the license lives on the parent beat. Default collab split is 50/50, negotiable with the producer.
         </Text>
+        <Text style={styles.note}>
+          Making a song is selling, so it takes a 1,000 VBEATS stake — stake on the web (Profile → Stake 1,000 VBEATS to sell). Nothing is blocked until staking goes live after the stake contract is deployed.
+        </Text>
         <Button
           title={beatLoading ? 'Publishing…' : 'Publish song'}
           onPress={handlePublish}

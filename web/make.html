@@ -72,6 +72,7 @@
     </div>
     <p class="note">Songs are not licensed from this page — the license lives on the parent beat. Your vocal take is yours, linked to the producer's beat, default 50/50 collab split, negotiable.</p>
     <p class="note" id="mk-cosign-note"></p>
+    <p class="note" id="mk-stake-note"></p>
     <p class="note" id="mk-pub-take-note"></p>
     <button class="btn" id="mk-pub-go" style="width:100%">Publish song</button>
     <p class="note">You need to be signed in — <a href="upload.html" style="color:var(--pur)">sign in here</a>.</p>
@@ -159,6 +160,21 @@ function paintPubTake() {
   el.textContent = t
     ? 'Publishing Take ' + t.id + (t.id === bestTakeId ? ' — your best take' : '') + ' · ' + fmt(t.dur * 1000) + '.'
     : '';
+}
+
+/* VBEATS staking (Nov 13, gate refined 23:34 CT): making a song is
+   seller-side, so it takes a 1,000 VBEATS stake — soft copy only, the
+   Publish button is never blocked. Buying beats and voting stay open
+   to everyone; no stake required for either. */
+function paintStakeNote() {
+  const n = $('mk-stake-note'); if (!n) return;
+  const done = (s) => {
+    const note = Flow.stakeGateNoteHtml('Making this song', s && s.isStaked);
+    n.innerHTML = note ? note + ' <a href="profile.html#stake" style="color:var(--pur)">Stake 1,000 VBEATS to sell →</a>' : '';
+  };
+  const w = (window.api && api.wallet) || '';
+  if (w && api.passStake) api.passStake(w).then(done).catch(() => done(null));
+  else done(null);
 }
 
 function fmt(ms) { const s = Math.floor(ms / 1000); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
@@ -376,6 +392,7 @@ function onTake() {
     div.style.borderColor = 'var(--pur)';
     $('mk-pub-card').style.display = '';
     paintPubTake();
+    paintStakeNote();
     drawWave(take);
     $('mk-pub-card').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   };

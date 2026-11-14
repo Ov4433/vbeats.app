@@ -83,6 +83,7 @@ model Beat {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   transactions Transaction[]
+  escrowListings EscrowListing[]
   plays       Play[]
   votes       Vote[]
   featuresAsSong   FeatureRequest[] @relation("FeatureSong")
@@ -110,11 +111,43 @@ model Transaction {
   // Crypto-native only — no fiat/card data is ever stored here.
   txHash          String?
   licenseKind     String?
+  // Escrow fee (Nov 13): channel 'direct' | 'escrow' (default 'direct'
+  // for rows recorded before the escrow route existed). feeEth is the
+  // 5% platform fee taken by BeatEscrow at settlement on escrow sales
+  // (0 on direct sales, which are legacy 0%-fee). amount is always the
+  // GROSS price the buyer paid; the dashboard nets the fee off.
+  channel         String?
+  feeEth          Float?
   createdAt       DateTime @default(now())
 
   @@index([buyerId])
   @@index([sellerId])
   @@index([beatId])
+}
+
+// Escrow listing registry (Nov 13): BeatEscrow has no fingerprint lookup,
+// so the buy panel finds the active escrow listing for a beat here.
+// One row per on-chain listingId; the producer reports it right after
+// list() mines, and the backend verifies seller + fingerprint + active
+// on-chain before accepting it. active is a DB mirror — the by-beat read
+// re-checks listings(listingId).active on-chain when it can, so a
+// settled/cancelled listing stops showing even if the row is stale.
+model EscrowListing {
+  id        String   @id @default(cuid())
+  beatId    String
+  beat      Beat     @relation(fields: [beatId], references: [id], onDelete: Cascade)
+  listingId Int
+  exclusive Boolean  @default(false)
+  amount    Int
+  priceWei  String   // TOTAL lot price in wei (fund() takes exactly this)
+  seller    String
+  active    Boolean  @default(true)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([listingId])
+  @@index([beatId, active])
 }
 
 model Play {

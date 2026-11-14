@@ -54,26 +54,87 @@ window.VBEATS_OFFERS_ADDRESS = window.VBEATS_OFFERS_ADDRESS || '0x64e75daee8eaF1
 // platform fee on this path, and the 10% royalty is EIP-2981 secondary
 // only — neither is added to the total shown to the buyer.
 //
-// --- PLATFORM FEE — NOT SET (Star decision open, Nov 13) -----------------
-// The three options are: (a) add a fee to the BeatNFT contract, (b) accept
-// 0% on direct buys, (c) route buys through BeatEscrow (which takes a
-// fee). Until Star picks one, direct buys pay the producer the FULL listed
-// price and the fee stays 0 — this constant is the single hook where the
-// chosen fee gets wired in (contract + dashboard copy), so nothing else
-// has to change. The dashboard and buy panel both read it and show the
-// fee as undecided; nothing here ever implies a fee is being taken.
-window.VBEATS_PLATFORM_FEE = { bps: 0, status: 'undecided' };
+// --- PLATFORM FEE — SET, 5% (Star decision, Nov 13: "5% is the fee") -----
+// The 5% is enforced on-chain by BeatEscrow at settlement (500 bps,
+// treasury = the studio wallet 0xEed0867dA5d387DAE2c548A4620c43cb26a9D517,
+// verified live on Base: platformFeeBps 500, MAX_FEE_BPS 1000). New
+// listings sell through escrow (listOnEscrow / buyViaEscrow below) and
+// the producer gets 95% of the listed price. Direct BeatNFT.buy() CANNOT
+// take a fee without a BeatNFT redeploy, so direct listings are legacy
+// 0%-fee sales: the full listed price goes to the producer. VBEATS stays
+// the membership coin; buys stay ETH on Base — no VBEATS payment path,
+// no fiat/card checkout anywhere.
+window.VBEATS_PLATFORM_FEE = { bps: 500, status: 'set' };
+window.VBEATS_ESCROW_ADDRESS = window.VBEATS_ESCROW_ADDRESS || '0xadB31f545Ba2eC6469aFFdcF3d7375D19a005e45';
+// VouchSBT (buyer verification for escrow fund): address as supplied
+// for this build. NOTE — web/js/deploy-data.js carries contract ABIs
+// and bytecode only, no deployed addresses, so this address could NOT
+// be cross-checked against that file; confirm it on Basescan before
+// the first live escrow sale if it has not been verified already.
+window.VBEATS_VOUCH_ADDRESS = window.VBEATS_VOUCH_ADDRESS || '0xA461b14a4a098544b5525959cE670A3f53E9FEdD';
+window.VBEATS_TREASURY_ADDRESS = window.VBEATS_TREASURY_ADDRESS || '0xEed0867dA5d387DAE2c548A4620c43cb26a9D517';
+// --- VBEATS staking (Nov 13 — Star: "Yes, build staking at 1,000 VBEATS") -
+// Stake exactly 1,000 VBEATS to SELL: listing beats for sale, making
+// songs, the producer dashboard and the feature inbox. The free
+// studio stays free, and buying beats in ETH stays open to everyone —
+// the stake is only required to sell. Voting stays open with its
+// existing hold-based weights (no stake required to vote). Unstake
+// returns the full 1,000: no slashing, no lockup, no yield — the access
+// IS the reward. VBEATS lives on Robinhood Chain (chainId 4663); the
+// stake contract lives there too. VBEATS_STAKE_ADDRESS stays EMPTY until
+// the VbeatsStaking contract is deployed — empty means "not deployed
+// yet", never a fake address. Buys stay ETH on Base; no VBEATS payment
+// path, no fiat/card checkout anywhere.
+window.VBEATS_TOKEN_ADDRESS = window.VBEATS_TOKEN_ADDRESS || '0x41b049ad7d0b25e7e534b1986e46a643185f3e24';
+window.VBEATS_RHC_CHAIN_ID = window.VBEATS_RHC_CHAIN_ID || 4663;
+window.VBEATS_RHC_RPC_URL = window.VBEATS_RHC_RPC_URL || 'https://rpc.mainnet.chain.robinhood.com';
+window.VBEATS_STAKE_ADDRESS = window.VBEATS_STAKE_ADDRESS || '';
+window.VBEATS_STAKE_REQUIRED = window.VBEATS_STAKE_REQUIRED || '1000';
 const BEAT_NFT_ABI = [
   'function buy(bytes32 fingerprint, bool exclusive, uint256 amount) payable',
   'function licensePrice(uint256 tokenId) view returns (uint256)',
   'function leaseTokenId(bytes32 fingerprint) view returns (uint256)',
   'function exclusiveTokenId(bytes32 fingerprint) view returns (uint256)',
   'function balanceOf(address account, uint256 tokenId) view returns (uint256)',
+  'function isApprovedForAll(address account, address operator) view returns (bool)',
+  'function setApprovalForAll(address operator, bool approved)',
   // Producer listing (money path, Nov 13): setPrice + stockForSale are the
   // two on-chain calls that make a beat buyable. listBeat() below runs
   // them in order; the BeatNFT contract itself is untouched.
   'function setPrice(bytes32 fingerprint, bool exclusive, uint256 priceWei)',
   'function stockForSale(bytes32 fingerprint, bool exclusive, uint256 amount)',
+];
+
+const BEAT_ESCROW_ABI = [
+  // list() moves `amount` licenses seller -> escrow and returns the
+  // listing id. priceWei is the TOTAL lot price (fund() requires
+  // msg.value == priceWei exactly, and settle() transfers `amount`
+  // tokens to the buyer) — not a per-license price.
+  'function list(address nft, uint256 tokenId, uint256 amount, uint256 priceWei, bytes32 fingerprint, uint64 expirySeconds) returns (uint256)',
+  'function fund(uint256 listingId) payable',
+  'function settle(uint256 listingId)',
+  'function listings(uint256 listingId) view returns (address seller, address nft, uint256 tokenId, uint256 amount, uint256 priceWei, bytes32 fingerprint, address buyer, uint64 expiresAt, bool active)',
+  'function platformFeeBps() view returns (uint16)',
+  'event Listed(uint256 indexed listingId, address indexed seller, bytes32 indexed fingerprint, uint256 tokenId, uint256 amount, uint256 priceWei)',
+];
+
+const VOUCH_ABI = [
+  'function isVerified(address account) view returns (bool)',
+];
+
+const VBEATS_STAKING_ABI = [
+  'function stake()',
+  'function unstake()',
+  'function stakedAmount(address account) view returns (uint256)',
+  'function isStaked(address account) view returns (bool)',
+  'function STAKE_AMOUNT() view returns (uint256)',
+  'function token() view returns (address)',
+];
+
+const VBEATS_TOKEN_ABI = [
+  'function approve(address spender, uint256 amount) returns (bool)',
+  'function allowance(address owner, address spender) view returns (uint256)',
+  'function balanceOf(address account) view returns (uint256)',
 ];
 
 const BEAT_OFFERS_ABI = [
@@ -176,9 +237,30 @@ const api = {
   // 404 = old backend — callers show an honest "needs the latest
   // backend" note, never invented earnings.
   dashboard() { return this.get('/v1/transactions/dashboard'); },
+
+  /** VBEATS membership read (Nov 13): the wallet's real VBEATS balance
+      on Robinhood Chain + Volt Pass state, from the backend. Returns null
+      on any failure — callers show nothing rather than inventing a
+      balance or a member badge. */
+  async passEligibility(address) {
+    if (!address) return null;
+    try { return await this.get('/v1/pass/eligibility/' + encodeURIComponent(address)); }
+    catch { return null; }
+  },
+
+  /** VBEATS stake read (Nov 13): { configured, staked, stakedFormatted,
+      isStaked, required: '1000' } from the backend. configured=false
+      means the stake contract is not deployed yet — staking is not live.
+      Returns null on any failure — callers show the "not live yet" /
+      "waking up" copy, never a fake stake. */
+  async passStake(address) {
+    if (!address) return null;
+    try { return await this.get('/v1/pass/stake/' + encodeURIComponent(address)); }
+    catch { return null; }
+  },
   myTransactions() { return this.get('/v1/transactions'); },
-  recordPurchase(beatId, txHash, amountEth, licenseKind) {
-    return this.post('/v1/transactions', { beatId, txHash, amountEth, licenseKind });
+  recordPurchase(beatId, txHash, amountEth, licenseKind, channel) {
+    return this.post('/v1/transactions', { beatId, txHash, amountEth, licenseKind, channel: channel || 'direct' });
   },
   play(id, listenedSec) {
     return this.post('/v1/beats/' + encodeURIComponent(id) + '/play', { listenedSec }).catch(() => null);
@@ -322,6 +404,228 @@ const api = {
     }
     if (!hashes.length) throw new Error('Enter a lease price or an exclusive price to list.');
     return hashes;
+  },
+
+  // --- Escrow listings (backend registry — escrow has no fingerprint
+  // lookup, so the buy panel finds the active listing for a beat here).
+  // 404 = old backend — escrowListings() returns [] and the buy panel
+  // falls back to the direct listing, never a fake escrow sale.
+  reportEscrowListing(body) { return this.post('/v1/escrow-listings', body); },
+  async escrowListings(beatId) {
+    try {
+      const d = await this.get('/v1/escrow-listings/by-beat/' + encodeURIComponent(beatId));
+      return (d && d.listings) || [];
+    } catch (e) {
+      if (String(e.message || '').includes('404')) return [];
+      throw e;
+    }
+  },
+
+  // --- BeatEscrow (5% platform fee, Star decision Nov 13) ---------------
+  escrowContract(signerOrProvider) {
+    if (!window.VBEATS_ESCROW_ADDRESS) throw new Error('Escrow contract is not deployed yet');
+    if (typeof ethers === 'undefined') throw new Error('Wallet library failed to load');
+    return new ethers.Contract(window.VBEATS_ESCROW_ADDRESS, BEAT_ESCROW_ABI, signerOrProvider);
+  },
+
+  vouchContract(provider) {
+    if (!window.VBEATS_VOUCH_ADDRESS) throw new Error('Vouch contract is not deployed yet');
+    if (typeof ethers === 'undefined') throw new Error('Wallet library failed to load');
+    return new ethers.Contract(window.VBEATS_VOUCH_ADDRESS, VOUCH_ABI, provider);
+  },
+
+  /** Is this wallet Vouch-verified (allowed to fund an escrow sale)?
+      VouchSBT.issue() is owner-only — buyers get vouched by the studio;
+      there is no self-serve vouch flow. */
+  async isVouched(address) {
+    if (!address) return false;
+    await ensureEthers();
+    const provider = new ethers.JsonRpcProvider(window.VBEATS_RPC_URL);
+    return !!(await this.vouchContract(provider).isVerified(address));
+  },
+
+  /** Producer escrow listing: deposits `amount` licenses into BeatEscrow
+      for one lot price, so the buyer's 5% fee is taken at settlement.
+      priceEth here is the PER-LICENSE price; the lot total sent to the
+      contract is priceEth × amount (exclusive: amount is always 1).
+      Who holds the tokens matters (BeatNFT.sol): mintLease /
+      mintExclusive mint to the producer's wallet, and stockForSale moves
+      them into the BeatNFT contract. list() can only move tokens the
+      producer still holds — tokens already stocked in BeatNFT for a
+      direct sale CANNOT move to escrow (BeatNFT has no withdraw), so
+      this refuses with a plain message instead of sending a doomed tx:
+      those stay legacy direct sales, and fresh mints can be escrowed.
+      Also grants the escrow contract approval first when needed.
+      Returns { listingId, txHash, tokenId, amount, priceWei } where
+      priceWei is the total lot price in wei. */
+  async listOnEscrow(fingerprint, opts = {}) {
+    if (!fingerprint) throw new Error('Beat not loaded yet');
+    const exclusive = !!opts.exclusive;
+    const amount = exclusive ? 1 : Math.max(1, Math.floor(Number(opts.amount) || 1));
+    const priceEth = Number(opts.priceEth);
+    if (!isFinite(priceEth) || priceEth <= 0) throw new Error('Enter a price in ETH to list via escrow.');
+    const expiryDays = Math.min(90, Math.max(1 / 24, Number(opts.expiryDays) || 30));
+    const expirySeconds = Math.min(90 * 86400, Math.max(3600, Math.floor(expiryDays * 86400)));
+    await ensureEthers();
+    const fp = this.fpHex(fingerprint);
+    const provider = new ethers.JsonRpcProvider(window.VBEATS_RPC_URL);
+    const read = this.nftContract(provider);
+    const tokenId = await read.licenseTokenId(fp, exclusive);
+    const signer = await this.getSigner();
+    const seller = (await signer.getAddress()).toLowerCase();
+    const [myBalance, stockedBalance] = await Promise.all([
+      read.balanceOf(seller, tokenId),
+      read.balanceOf(window.VBEATS_NFT_ADDRESS, tokenId),
+    ]);
+    if (myBalance < BigInt(amount)) {
+      if (stockedBalance >= BigInt(amount)) {
+        throw new Error(
+          exclusive
+            ? 'Your exclusive is already stocked in the BeatNFT contract for a direct sale, so it cannot move to escrow — BeatNFT has no way to take it back. That listing stays a legacy direct sale (no platform fee); the exclusive can only sell that way.'
+            : 'Your leases for this beat are already stocked in the BeatNFT contract for direct sale, so they cannot move to escrow — BeatNFT has no way to take them back. Those stay legacy direct sales (no platform fee). Mint fresh leases to yourself and list those via escrow instead.'
+        );
+      }
+      throw new Error(
+        'You hold no ' + (exclusive ? 'exclusive' : 'lease') + ' licenses for this beat in your wallet yet — mint them to yourself first (mintLease / mintExclusive on BeatNFT), then list them via escrow.'
+      );
+    }
+    const nft = this.nftContract(signer);
+    if (window.Flow) Flow.txPending('Checking escrow approval');
+    if (!(await nft.isApprovedForAll(seller, window.VBEATS_ESCROW_ADDRESS))) {
+      if (window.Flow) Flow.txPending('Approving escrow to hold your licenses');
+      const t0 = await nft.setApprovalForAll(window.VBEATS_ESCROW_ADDRESS, true);
+      await t0.wait();
+    }
+    const totalWei = ethers.parseEther(String(priceEth)) * BigInt(amount);
+    const escrow = this.escrowContract(signer);
+    if (window.Flow) Flow.txPending('Listing via escrow — licenses move into escrow');
+    const tx = await escrow.list(window.VBEATS_NFT_ADDRESS, tokenId, amount, totalWei, fp, expirySeconds);
+    const receipt = await tx.wait();
+    let listingId = null;
+    try {
+      for (const log of receipt.logs || []) {
+        try {
+          const parsed = escrow.interface.parseLog(log);
+          if (parsed && parsed.name === 'Listed') { listingId = Number(parsed.args.listingId); break; }
+        } catch { /* not our event */ }
+      }
+    } catch { /* listing id unreadable — reported below */ }
+    if (window.Flow) Flow.txConfirmed('Listed via escrow' + (listingId != null ? ' — listing #' + listingId : ''), tx.hash);
+    return { listingId, txHash: tx.hash, tokenId: tokenId.toString(), amount, priceWei: totalWei.toString() };
+  },
+
+  /** Escrow buy: fund() the exact lot price, then settle() in the same
+      tap — settle sends the NFT to the buyer, 5% to the treasury and
+      95% to the producer (or the collab split for an approved take).
+      Checks Vouch first and throws a plain message when the buyer is
+      not verified — no wallet pop-up for a tx that must revert. If
+      fund mines but settle fails, the ETH stays locked in escrow until
+      the buyer calls refund() on the contract — the error says so.
+      Returns { fundHash, settleHash }. */
+  async buyViaEscrow(listingId, priceWei) {
+    if (listingId == null) throw new Error('No escrow listing to buy from');
+    const price = BigInt(priceWei);
+    if (price <= 0n) throw new Error('That escrow listing has no price — it cannot be bought.');
+    await ensureEthers();
+    const signer = await this.getSigner();
+    const buyer = await signer.getAddress();
+    if (!(await this.isVouched(buyer))) {
+      throw new Error('You are not Vouch-verified yet — escrow sales are for verified buyers only. Vouching is done by the studio (there is no self-serve vouch); ask the studio to vouch your wallet, then try again.');
+    }
+    const escrow = this.escrowContract(signer);
+    if (window.Flow) Flow.txPending('Funding the escrow sale');
+    let fundHash;
+    try {
+      const fundTx = await escrow.fund(listingId, { value: price });
+      await fundTx.wait();
+      fundHash = fundTx.hash;
+    } catch (e) {
+      throw new Error('Escrow funding failed: ' + (e.message || e));
+    }
+    if (window.Flow) Flow.txPending('Settling — NFT to you, 95% to the producer, 5% to the treasury');
+    try {
+      const settleTx = await escrow.settle(listingId);
+      await settleTx.wait();
+      if (window.Flow) Flow.txConfirmed('License bought via escrow', settleTx.hash);
+      return { fundHash, settleHash: settleTx.hash };
+    } catch (e) {
+      throw new Error('Funded, but settlement failed: ' + (e.message || e) + ' Your ETH is locked in escrow until you call refund() on the BeatEscrow contract — ask the studio for help rather than paying again.');
+    }
+  },
+
+  /** --- VBEATS staking (Nov 13) -----------------------------------------
+      Stake exactly 1,000 VBEATS on Robinhood Chain to sell (listing,
+      Make a song, producer dashboard). Two wallet confirmations, standard ERC20 staking: (1) approve the
+      stake contract to pull 1,000 VBEATS, (2) stake(). Unstake returns
+      the full 1,000 — no lockup, no slashing, no yield; the access is
+      the reward. Both refuse plainly while VBEATS_STAKE_ADDRESS is
+      empty (contract not deployed yet) — never a fake transaction. */
+  stakeContract(signerOrProvider) {
+    if (!window.VBEATS_STAKE_ADDRESS) throw new Error('Staking is not live yet — the stake contract has not been deployed. Nothing to sign.');
+    if (typeof ethers === 'undefined') throw new Error('Wallet library failed to load');
+    return new ethers.Contract(window.VBEATS_STAKE_ADDRESS, VBEATS_STAKING_ABI, signerOrProvider);
+  },
+
+  async ensureRhcChain() {
+    const chainIdHex = '0x' + Number(window.VBEATS_RHC_CHAIN_ID).toString(16);
+    try {
+      await window.ethereum.request({
+        method: 'wallet_switchEthereumChain', params: [{ chainId: chainIdHex }],
+      });
+    } catch (e) {
+      if (e && e.code === 4902) {
+        throw new Error('Your wallet does not have Robinhood Chain yet — add it in your wallet (chain ID 4663, the chain VBEATS lives on), then try again.');
+      }
+      throw e;
+    }
+  },
+
+  async getRhcSigner() {
+    if (!this.wallet) throw new Error('Connect your wallet first');
+    if (!window.ethereum) throw new Error('No wallet found');
+    await ensureEthers();
+    await this.ensureRhcChain();
+    return new ethers.BrowserProvider(window.ethereum).getSigner();
+  },
+
+  /** Stake 1,000 VBEATS. Two confirmations: approve, then stake.
+      Skips the approve step when the allowance already covers it.
+      Returns { approveHash, stakeHash } (approveHash is null when the
+      approval was already in place). */
+  async stakeVbeats() {
+    if (!window.VBEATS_STAKE_ADDRESS) throw new Error('Staking is not live yet — the stake contract has not been deployed.');
+    await ensureEthers();
+    const signer = await this.getRhcSigner();
+    const staker = await signer.getAddress();
+    const token = new ethers.Contract(window.VBEATS_TOKEN_ADDRESS, VBEATS_TOKEN_ABI, signer);
+    const amount = ethers.parseUnits(window.VBEATS_STAKE_REQUIRED, 18);
+    let approveHash = null;
+    if ((await token.allowance(staker, window.VBEATS_STAKE_ADDRESS)) < amount) {
+      if (window.Flow) Flow.txPending('Approve 1,000 VBEATS for staking (confirmation 1 of 2)');
+      const t0 = await token.approve(window.VBEATS_STAKE_ADDRESS, amount);
+      await t0.wait();
+      approveHash = t0.hash;
+    }
+    const staking = this.stakeContract(signer);
+    if (window.Flow) Flow.txPending('Stake 1,000 VBEATS (confirmation 2 of 2)');
+    const tx = await staking.stake();
+    await tx.wait();
+    if (window.Flow) Flow.txConfirmed('Staked — everything unlocked', tx.hash);
+    return { approveHash, stakeHash: tx.hash };
+  },
+
+  /** Unstake: the full 1,000 VBEATS returns to your wallet. One
+      confirmation. Returns the tx hash. */
+  async unstakeVbeats() {
+    if (!window.VBEATS_STAKE_ADDRESS) throw new Error('Staking is not live yet — the stake contract has not been deployed.');
+    await ensureEthers();
+    const signer = await this.getRhcSigner();
+    const staking = this.stakeContract(signer);
+    if (window.Flow) Flow.txPending('Unstaking — your full 1,000 VBEATS comes back');
+    const tx = await staking.unstake();
+    await tx.wait();
+    if (window.Flow) Flow.txConfirmed('Unstaked — 1,000 VBEATS returned', tx.hash);
+    return tx.hash;
   },
 
   /** On-chain producer (beat owner) for a fingerprint, via the registry. */
@@ -480,6 +784,32 @@ function tabbar(active) {
   document.body.classList.add('has-tabbar');
 }
 
+// VBEATS membership pill in the nav (Nov 13): the connected wallet's
+// real VBEATS balance + Volt Pass member number, from
+// /v1/pass/eligibility/. Cached 60s per wallet; any failure leaves the
+// pill empty — the chip never shows a balance or badge that wasn't
+// returned by the backend.
+let memberCache = { addr: '', at: 0, data: null };
+function memberPillHtml(d) {
+  if (!d || d.configured === false) return '';
+  if (d.hasPass) return `<a class="member-pill" href="profile.html" title="Volt Pass member">🦇 Member #${esc(d.memberNumber ?? '')}</a>`;
+  const bal = Number(d.balanceFormatted || 0);
+  if (bal > 0) return `<a class="member-pill" href="claim.html" title="VBEATS balance — claim your Volt Pass at 10 VBEATS">${esc(d.balanceFormatted)} VBEATS</a>`;
+  return '';
+}
+async function refreshMemberPill(w) {
+  const pill = document.getElementById('member-pill');
+  if (!pill || !w) return;
+  const now = Date.now();
+  let d = (memberCache.addr === w && now - memberCache.at < 60000) ? memberCache.data : null;
+  if (!d) {
+    d = await api.passEligibility(w);
+    memberCache = { addr: w, at: now, data: d };
+  }
+  window.__vbeatsMember = d;
+  pill.innerHTML = memberPillHtml(d);
+}
+
 function renderUser() {
   const box = document.getElementById('nav-user');
   if (!box) return;
@@ -496,7 +826,7 @@ function renderUser() {
   if (w) {
     const bat = api.bat ? batById(api.bat) : null;
     const dot = bat ? `<span class="bat-dot" style="background:${bat.color};width:22px;height:22px;font-size:11px;margin:0 4px 0 0;vertical-align:-6px">${bat.name[0]}</span>` : '';
-    html += ` ${dot}<button class="btn ghost small" id="wallet-btn" title="${esc(w)} — tap to disconnect">${esc(w.slice(0, 6))}…${esc(w.slice(-4))}</button>`;
+    html += ` ${dot}<button class="btn ghost small" id="wallet-btn" title="${esc(w)} — tap to disconnect">${esc(w.slice(0, 6))}…${esc(w.slice(-4))}</button><span id="member-pill"></span>`;
   } else {
     html += ' <button class="btn small" id="wallet-btn">Connect wallet</button>';
   }
@@ -521,6 +851,7 @@ function renderUser() {
       }
     } catch (e) { alert(e.message); }
   };
+  if (w) refreshMemberPill(w);
 }
 
 // Keep the nav button in sync when the user switches accounts.

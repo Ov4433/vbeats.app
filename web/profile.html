@@ -23,6 +23,7 @@
 
   <div class="card" id="dashboard-card" style="margin:18px 0">
     <h3 style="margin-bottom:10px">💰 Producer dashboard</h3>
+    <p class="note" id="dashboard-stake-note"></p>
     <div id="dashboard-box"><p class="note">Sign in to see your earnings, sales, and offers.</p></div>
   </div>
 
@@ -34,6 +35,11 @@
   <div class="card" style="margin:18px 0">
     <h3 style="margin-bottom:10px">Volt Founding Producer Pass</h3>
     <div id="pass-box"><p class="note">Connect a wallet to see your pass.</p></div>
+  </div>
+
+  <div class="card" style="margin:18px 0">
+    <h3 style="margin-bottom:10px">🔒 Stake 1,000 VBEATS to sell</h3>
+    <div id="stake-box"><p class="note">Connect a wallet to see your stake.</p></div>
   </div>
 
   <div class="card" style="margin:18px 0">
@@ -96,6 +102,7 @@ function renderProfile() {
        <a class="btn ghost small" href="upload.html">Sign in</a>`;
 
   if (w) loadPass(w);
+  if (w) loadStake(w);
   loadSolana();
   loadPublicLink();
   loadBat();
@@ -115,8 +122,14 @@ async function loadDashboard() {
     const d = await api.dashboard();
     const eth = Number(d.earningsEth || 0);
     const sales = Number(d.salesCount || 0);
+    // New backend returns gross + fee alongside the net; old backend
+    // returns only earningsEth — then the fee line stays hidden and the
+    // single number is shown as before, never invented.
+    const hasFeeBreakdown = d.grossEth != null || d.feeEth != null;
+    const gross = Number(d.grossEth || 0);
+    const fee = Number(d.feeEth || 0);
     const perBeat = (d.perBeat || []).map(p =>
-      `<p style="padding:7px 0;border-bottom:1px solid var(--line)"><a href="beat.html?id=${esc(p.beatId)}"><b>${esc(p.title)}</b></a> <span class="note">· ${esc(p.sales)} sold · ${esc(p.eth)} ETH</span></p>`).join('');
+      `<p style="padding:7px 0;border-bottom:1px solid var(--line)"><a href="beat.html?id=${esc(p.beatId)}"><b>${esc(p.title)}</b></a> <span class="note">· ${esc(p.sales)} sold · ${esc(p.eth)} ETH net${Number(p.feeEth) ? ' · fee ' + esc(p.feeEth) + ' ETH' : ''}</span></p>`).join('');
     const offers = (d.pendingOffers || []).map(o =>
       `<p style="padding:7px 0;border-bottom:1px solid var(--line)"><a href="beat.html?id=${esc(o.beatId)}"><b>${esc(o.beatTitle)}</b></a> <span class="note">· ${esc(o.exclusive ? '1-of-1 exclusive' : o.amount + ' leases')} · bid ${esc(o.bidEth)} ETH · from ${esc(o.buyer.slice(0, 6))}…${esc(o.buyer.slice(-4))} · expires ${esc(new Date(o.expiresAt).toLocaleString())}</span></p>`).join('');
     const buys = (d.purchases || []).map(t => {
@@ -127,12 +140,13 @@ async function loadDashboard() {
     }).join('');
     box.innerHTML =
       `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;text-align:center;margin-bottom:12px">
-        <div><div style="font-size:22px;font-weight:700">${esc(eth)} ETH</div><div class="note">Earnings (completed on-chain sales)</div></div>
+        <div><div style="font-size:22px;font-weight:700">${esc(eth)} ETH</div><div class="note">Earnings — net, after the 5% escrow fee</div></div>
         <div><div style="font-size:22px;font-weight:700">${esc(sales)}</div><div class="note">Licenses sold</div></div>
         <div><div style="font-size:22px;font-weight:700">${esc(d.beatsCount || 0)}</div><div class="note">Your beats</div></div>
         <div><div style="font-size:22px;font-weight:700">${esc(d.pendingOffers ? d.pendingOffers.length : 0)}</div><div class="note">Pending offers</div></div>
       </div>
-      <p class="note">${Flow.feeNoteHtml()}</p>` +
+      ${hasFeeBreakdown ? `<p class="note">Gross ${esc(gross)} ETH · platform fee ${esc(fee)} ETH (5% on escrow sales; direct sales are legacy 0%-fee) · net ${esc(eth)} ETH.</p>` : ''}
+      <p class="note">${Flow.feeNoteHtml('escrow')}</p>` +
       (d.legacySalesCount ? `<p class="note" style="margin-top:6px">${esc(d.legacySalesCount)} older sale${d.legacySalesCount === 1 ? '' : 's'} from before the crypto ledger are not counted in the ETH total above.</p>` : '') +
       (sales ? `<h4 style="margin:14px 0 4px">Sales by beat</h4>${perBeat}` : '<p class="note" style="margin-top:10px">No sales yet — list a beat for sale on its page and instant buy goes live.</p>') +
       `<h4 style="margin:14px 0 4px">Pending offers on your beats</h4>` +
@@ -291,6 +305,94 @@ async function loadBat() {
     } catch { /* local mirror still applies */ }
   } else if (!selected) {
     note.textContent = 'Saved on this device. Sign in and it follows your account.';
+  }
+}
+
+/* VBEATS staking (Nov 13): stake exactly 1,000 VBEATS to sell —
+   listing beats for sale, making songs, the producer dashboard and
+   the feature inbox. The studio stays free, and buying beats in ETH
+   stays open to everyone. Unstake returns the full 1,000: no lockup,
+   no slashing, no yield — the access is the reward. While the stake
+   contract is undeployed there is NO live Stake button: the card says
+   plainly that staking goes live after the contract is deployed, and
+   nothing is blocked until then. Balances come from the backend only. */
+async function loadStake(w) {
+  const box = document.getElementById('stake-box');
+  const note = document.getElementById('dashboard-stake-note');
+  const setNote = (staked) => {
+    if (note) note.textContent = Flow.stakeGateNoteHtml('Selling, Make a song and the producer dashboard', staked);
+  };
+  try {
+    const [stake, elig] = await Promise.all([
+      api.passStake(w),
+      api.passEligibility(w),
+    ]);
+    const bal = elig ? elig.balanceFormatted : null;
+    window.__vbeatsStake = stake;
+    if (!stake) {
+      box.innerHTML = '<p class="note">Stake status is waking up — refresh in a few seconds.</p>';
+      setNote(false);
+      return;
+    }
+    if (stake.isStaked) {
+      setNote(true);
+      box.innerHTML = `<p style="margin-bottom:6px">✅ <b>Staked — ${esc(stake.stakedFormatted)} VBEATS</b></p>
+        <p class="note" style="margin-bottom:12px">Selling is unlocked: listing beats for sale, making songs, the producer dashboard and the feature inbox. Unstake any time and the full 1,000 VBEATS comes back — no lockup, no fee.</p>
+        <button class="btn ghost small" id="unstake-btn">Unstake — return my 1,000 VBEATS</button>
+        <span class="note" id="stake-note"></span>`;
+      document.getElementById('unstake-btn').onclick = doUnstake;
+      return;
+    }
+    setNote(false);
+    const balLine = bal != null
+      ? `<p class="note" style="margin-bottom:6px">Your VBEATS balance: <b>${esc(bal)}</b> — the stake needs <b>1,000</b>.</p>`
+      : '';
+    if (!stake.configured) {
+      box.innerHTML = balLine +
+        `<p class="note" style="margin-bottom:6px"><b>Staking goes live after the stake contract is deployed.</b></p>
+         <p class="note">Stake exactly 1,000 VBEATS to sell: listing beats for sale, making songs, the producer dashboard and the feature inbox. The studio stays free, and buying beats in ETH stays open to everyone — the stake is only required to sell. Unstake any time and the full 1,000 VBEATS comes back. No lockup, no yield — the access is the reward. Nothing is blocked until staking goes live.</p>`;
+      return;
+    }
+    const short = bal != null && Number(bal) < 1000;
+    box.innerHTML = balLine +
+      (short
+        ? `<p class="note" style="margin-bottom:12px">You need 1,000 VBEATS to stake — top up on Pons first, then come back. Staking takes two wallet confirmations: approve 1,000 VBEATS, then stake.</p>`
+        : `<p class="note" style="margin-bottom:12px">You're ready to stake. Two wallet confirmations: approve 1,000 VBEATS, then stake. Unstake any time — the full 1,000 comes back.</p>`) +
+      `<button class="btn small" id="stake-btn"${short ? ' disabled' : ''}>Stake 1,000 VBEATS</button>
+       <span class="note" id="stake-note"></span>`;
+    const btn = document.getElementById('stake-btn');
+    if (btn) btn.onclick = doStake;
+  } catch {
+    box.innerHTML = '<p class="note">Stake status is waking up — refresh in a few seconds.</p>';
+    setNote(false);
+  }
+}
+
+async function doStake() {
+  const note = document.getElementById('stake-note');
+  const btn = document.getElementById('stake-btn');
+  try {
+    if (btn) { btn.disabled = true; btn.textContent = 'Check your wallet…'; }
+    if (note) note.textContent = ' Two confirmations: approve, then stake.';
+    await api.stakeVbeats();
+    loadStake(api.wallet);
+  } catch (e) {
+    if (note) note.textContent = ' ' + (e.message || String(e));
+    if (btn) { btn.disabled = false; btn.textContent = 'Stake 1,000 VBEATS'; }
+  }
+}
+
+async function doUnstake() {
+  const note = document.getElementById('stake-note');
+  const btn = document.getElementById('unstake-btn');
+  try {
+    if (btn) { btn.disabled = true; btn.textContent = 'Check your wallet…'; }
+    if (note) note.textContent = ' One confirmation — your full 1,000 VBEATS comes back.';
+    await api.unstakeVbeats();
+    loadStake(api.wallet);
+  } catch (e) {
+    if (note) note.textContent = ' ' + (e.message || String(e));
+    if (btn) { btn.disabled = false; btn.textContent = 'Unstake — return my 1,000 VBEATS'; }
   }
 }
 

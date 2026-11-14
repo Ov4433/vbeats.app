@@ -138,8 +138,9 @@ export default function BeatDetailScreen({ route, navigation }: any) {
   // Ownership path (Grok, Nov 13): listed → buy, unlisted → offer.
   // Mobile has no in-app buy/offer flow yet, so the buttons open the
   // real web beat page (#buy / #offer) — never a fake in-app purchase.
-  // The full listed price goes to the producer; the BeatNFT contract
-  // takes no platform fee on direct buy.
+  // New listings sell via escrow: 5% platform fee, producer gets 95%.
+  // A direct BeatNFT listing predates the fee and stays a legacy 0%-fee
+  // sale — the web beat page checks which path is live before you pay.
   const listed = Number(currentBeat?.price) > 0;
   const webBeatUrl = (anchor: string) =>
     `https://ov4433.github.io/vbeats.app/beat.html?id=${encodeURIComponent(currentBeat?.id || beatId)}${anchor}`;
@@ -312,12 +313,12 @@ export default function BeatDetailScreen({ route, navigation }: any) {
         </Text>
         <Text style={styles.pathSub}>
           {listed
-            ? `${currentBeat.price} ETH — the full listed price goes to the producer, no platform fee on direct buy.`
+            ? `${currentBeat.price} ETH — new listings sell via escrow: 5% platform fee, the producer gets 95%. A direct listing predates the fee and stays a legacy 0%-fee sale.`
             : 'The producer has not set a price or stocked licenses yet, so instant buy is not available — you can still make an offer.'}
         </Text>
         <Text style={styles.pathSub}>
           {listed
-            ? 'Buying opens the beat page on the web, where the live BeatNFT listing is checked before you pay.'
+            ? 'Buying opens the beat page on the web, where the live listing is checked before you pay — escrow buyers must be Vouch-verified first.'
             : 'Offers are made on the web beat page, where the producer can accept, counter or reject.'}
         </Text>
         <Button
@@ -327,14 +328,15 @@ export default function BeatDetailScreen({ route, navigation }: any) {
       </View>
 
       {/* Producer listing (money path, Nov 13): listing happens on the
-          web beat page (#list) — the real setPrice / stockForSale calls
-          run there with the connected wallet. Mobile never fakes a
-          listing; it deep-links to the real form. */}
+          web beat page (#list) — the real escrow list / setPrice +
+          stockForSale calls run there with the connected wallet. Mobile
+          never fakes a listing or an escrow tx; it deep-links to the
+          real form. */}
       {isProducer && currentBeat.kind !== 'song' && (
         <View style={styles.pathCard}>
           <Text style={styles.pathTitle}>🏷️ List for sale</Text>
           <Text style={styles.pathSub}>
-            You are the producer. Set a lease price, stock, and an exclusive price on the web beat page — two wallet confirmations per type — and instant buy goes live. Platform fee: not set yet, so the full listed price goes to you.
+            You are the producer. List via escrow on the web beat page — 5% platform fee, you get 95% of the listed price. Direct listings made before the fee stay legacy 0%-fee sales.
           </Text>
           <Button
             title="List for sale on the web"
