@@ -106,6 +106,30 @@ export async function votedBeatIds(
   return new Set(votes.map((v) => v.beatId));
 }
 
+/**
+ * Vote totals inside a time window (e.g. the current UTC week) — the
+ * honest input for "Trending this week". Same shape as voteTotals.
+ */
+export async function voteTotalsInWindow(
+  beatIds: string[],
+  start: Date,
+  end: Date
+): Promise<Map<string, VoteTotal>> {
+  if (beatIds.length === 0) return new Map();
+  const groups = await prisma.vote.groupBy({
+    by: ['beatId'],
+    where: { beatId: { in: beatIds }, createdAt: { gte: start, lt: end } },
+    _sum: { weight: true },
+    _count: { beatId: true },
+  });
+  return new Map(
+    groups.map((g) => [
+      g.beatId,
+      { totalWeight: g._sum.weight ?? 0, count: g._count.beatId },
+    ])
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Weekly window — Mon 00:00:00.000 UTC through the following Monday
 // (end exclusive), i.e. the Mon–Sun UTC week containing `now`.
@@ -181,9 +205,30 @@ export async function topVoted(limit = 10): Promise<{
       _min: { createdAt: true },
     }),
   ]);
-  return {
-    week,
-    weekList: rankGroups(weekGroups as RankableGroup[], limit),
-    allTimeList: rankGroups(allTimeGroups as RankableGroup[], limit),
-  };
+  const weekList = rankGroups(weekGroups as RankableGroup[], limit);
+  const allTimeList = rankGroups(allTimeGroups as RankableGroup[], limit);
+
+  // Vote gate (Nov 13): a song that is still awaiting producer co-sign
+  // — or was declined — never surfaces in Top Voted, even if votes were
+  // somehow recorded for it. Beats are unaffected.
+  const allIds = [...new Set([...weekList, ...allTimeList].map((r) => r.beatId))];
+  if (allIds.length > 0) {
+    const rows = await prisma.beat.findMany({
+      where: { id: { in: allIds } },
+      select: { id: true, kind: true, coSignStatus: true },
+    });
+    const hidden = new Set(
+      rows
+        .filter((b: any) => b.kind === 'song' && b.coSignStatus !== 'live')
+        .map((b) => b.id)
+    );
+    if (hidden.size > 0) {
+      return {
+        week,
+        weekList: weekList.filter((r) => !hidden.has(r.beatId)),
+        allTimeList: allTimeList.filter((r) => !hidden.has(r.beatId)),
+      };
+    }
+  }
+  return { week, weekList, allTimeList };
 }

@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Make a song — Verified Beats Studio</title>
+<link rel="icon" href="assets/logo.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<nav class="nav" id="nav"></nav>
+<main class="wrap" style="max-width:720px">
+  <div class="page-head"><div><h1>🎤 Make a song</h1>
+  <p>Rap over a fingerprinted beat, Rapchat-style — with VBeats ownership on it. Pick a beat, record your vocals while it loops, publish a fingerprinted song linked to the parent beat.</p></div></div>
+  <div id="err"></div>
+
+  <!-- Step 1 · Pick a beat -->
+  <div class="card">
+    <h2 style="margin-top:0">1 · Pick a beat to rap on</h2>
+    <p class="note">Only fingerprinted beats can carry a song — the fingerprint is what links your vocals to the real track.</p>
+    <div class="field"><label>Search beats</label>
+      <input id="mk-search" type="text" placeholder="Search by title, genre…" style="width:100%">
+    </div>
+    <div class="demo-row" style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0">
+      <button class="btn small" id="mk-search-go">Search</button>
+      <button class="btn small ghost" id="mk-browse">Browse the marketplace</button>
+    </div>
+    <div id="mk-results"><p class="note">Search, browse, or open a beat page and tap “🎤 Rap on this beat”.</p></div>
+    <div id="mk-parent" style="display:none;margin-top:14px"></div>
+  </div>
+
+  <!-- Step 2 · Record vocals over the loop -->
+  <div class="card" style="margin-top:18px">
+    <h2 style="margin-top:0">2 · Record your vocals over the loop</h2>
+    <p class="note">The beat loops while you record. Pick a length — timed from the beat's BPM — or Free. There is a 1-bar count-in first, and recording stops itself at the end of the window.</p>
+    <div class="demo-row" style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0;align-items:center">
+      <span class="note">Length:</span>
+      <button class="btn small ghost bar-chip" data-bars="8">8 bars</button>
+      <button class="btn small bar-chip on" data-bars="16">16 bars</button>
+      <button class="btn small ghost bar-chip" data-bars="32">32 bars</button>
+      <button class="btn small ghost bar-chip" data-bars="free">Free</button>
+      <span class="note" id="mk-bar-info"></span>
+    </div>
+    <audio id="mk-loop" loop controls style="width:100%"></audio>
+    <label class="note" style="display:block;margin-top:10px"><input type="checkbox" id="mk-metro"> Metronome click in the count-in</label>
+    <canvas id="mk-wave" width="680" height="90" style="width:100%;border:1px solid var(--line);border-radius:12px;margin-top:10px"></canvas>
+    <p class="note" id="mk-wave-note">Bar grid for your chosen length — the waveform of your selected take draws here once you record one.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center">
+      <button class="btn" id="mk-rec" disabled>● Record vocals</button>
+      <span class="note" id="mk-rec-status">Pick a beat first.</span>
+    </div>
+    <p class="note" id="mk-bars-left" style="margin-top:8px"></p>
+    <div class="meter" style="margin-top:10px"><div id="mk-meterfill"></div></div>
+    <p class="note" id="mk-hint">Your browser will ask for mic permission.</p>
+    <div id="mk-rec-err"></div>
+  </div>
+
+  <!-- Step 3 · Takes -->
+  <h2 style="margin:26px 0 8px">3 · Takes</h2>
+  <div id="mk-takes"><p class="note">No takes yet.</p></div>
+
+  <!-- Step 4 · Publish -->
+  <div class="card" id="mk-pub-card" style="display:none;margin-top:18px">
+    <h2 style="margin-bottom:6px">4 · Publish your song</h2>
+    <div id="mk-pub-err"></div>
+    <div class="field"><label>Song title</label><input id="mk-title" placeholder="My song over…"></div>
+    <div class="row2">
+      <div class="field"><label>Genre</label>
+        <select id="mk-genre"><option>Hip-Hop</option><option>Trap</option><option>R&amp;B</option><option>Pop</option><option>Drill</option><option>Afrobeats</option><option>EDM</option><option>Other</option></select>
+      </div>
+      <div class="field"><label>Price</label><input value="Not sold here — free" disabled></div>
+    </div>
+    <p class="note">Songs are not licensed from this page — the license lives on the parent beat. Your vocal take is yours, linked to the producer's beat, default 50/50 collab split, negotiable.</p>
+    <p class="note" id="mk-cosign-note"></p>
+    <p class="note" id="mk-pub-take-note"></p>
+    <button class="btn" id="mk-pub-go" style="width:100%">Publish song</button>
+    <p class="note">You need to be signed in — <a href="upload.html" style="color:var(--pur)">sign in here</a>.</p>
+    <p class="note">Co-sign needs the latest backend. If your song shows up in the feed as a plain beat, the backend update has not landed yet — the song is still published and fingerprinted.</p>
+    <div id="mk-pub-done"></div>
+  </div>
+</main>
+<footer class="footer"><div class="footer-bat"><img src="assets/mascot-profile.webp" alt=""></div>Verified Beats Studio — Volt keeps the receipts.</footer>
+<script src="js/api.js"></script>
+<script src="js/flow.js"></script>
+<script src="js/volt.js"></script>
+<script>
+nav('make.html');
+const $ = id => document.getElementById(id);
+let parentBeat = null, selectedTake = null, takeN = 0;
+let takes = [], bestTakeId = null; // best-of-3 retakes: keep up to 3 takes, one marked best
+let mediaRec = null, stream = null, audioCtx = null, analyser = null, meterRaf = null, chunks = [], startTs = 0;
+let barLen = 16, stopTimer = null, barsTimer = null;
+let mixCtx = null, mixCtxNodes = [], mixHtml = [];
+let metroCtx = null;
+
+/* Metronome click (booth finisher, Nov 13): one short click per count-in
+   beat, off by default. A plain oscillator — no audio file, no download. */
+function metroClick() {
+  try {
+    metroCtx = metroCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (metroCtx.state === 'suspended') metroCtx.resume().catch(() => {});
+    const o = metroCtx.createOscillator(), g = metroCtx.createGain();
+    o.frequency.value = 1200;
+    g.gain.setValueAtTime(0.25, metroCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, metroCtx.currentTime + 0.06);
+    o.connect(g); g.connect(metroCtx.destination);
+    o.start(); o.stop(metroCtx.currentTime + 0.07);
+  } catch { /* click is a nicety — a failed click never blocks recording */ }
+}
+
+/* Bar grid + waveform (booth finisher, Nov 13): the canvas draws the bar
+   grid for the chosen length at the beat's BPM, and the waveform of the
+   selected/best take on top of it. If the browser cannot decode the take,
+   the grid still draws and the note says so honestly. */
+function drawWave(take) {
+  const cv = $('mk-wave');
+  if (!cv) return;
+  const ctx = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#101016';
+  ctx.fillRect(0, 0, W, H);
+  const bars = barLen === 'free' ? 16 : barLen;
+  ctx.strokeStyle = 'rgba(150,60,255,.35)';
+  ctx.fillStyle = '#9a9aa8';
+  ctx.font = '10px sans-serif';
+  for (let i = 0; i <= bars; i++) {
+    const x = Math.round((i / bars) * W) + 0.5;
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+    if (i % 4 === 0 && i < bars) ctx.fillText('bar ' + (i + 1), x + 4, 12);
+  }
+  if (!take) return;
+  const note = $('mk-wave-note');
+  const tmp = new (window.AudioContext || window.webkitAudioContext)();
+  take.blob.arrayBuffer().then(buf => tmp.decodeAudioData(buf)).then(dec => {
+    const data = dec.getChannelData(0);
+    const step = Math.max(1, Math.floor(data.length / W));
+    ctx.fillStyle = '#c77dff';
+    for (let x = 0; x < W; x++) {
+      let peak = 0;
+      for (let i = x * step; i < (x + 1) * step && i < data.length; i += 4) {
+        peak = Math.max(peak, Math.abs(data[i]));
+      }
+      const h = Math.max(1, peak * H * 0.9);
+      ctx.fillRect(x, (H - h) / 2, 1, h);
+    }
+    if (note) note.textContent = 'Waveform of Take ' + take.id + ' over the ' + bars + '-bar grid.';
+    tmp.close().catch(() => {});
+  }).catch(() => {
+    if (note) note.textContent = 'Waveform unavailable in this browser — the bar grid still shows your length.';
+    tmp.close().catch(() => {});
+  });
+}
+
+function paintPubTake() {
+  const el = $('mk-pub-take-note');
+  if (!el) return;
+  const t = selectedTake || takes.find(t => t.id === bestTakeId) || takes[takes.length - 1];
+  el.textContent = t
+    ? 'Publishing Take ' + t.id + (t.id === bestTakeId ? ' — your best take' : '') + ' · ' + fmt(t.dur * 1000) + '.'
+    : '';
+}
+
+function fmt(ms) { const s = Math.floor(ms / 1000); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
+
+/* Timed booth (Nov 13): length in bars, timed from the parent beat's
+   BPM (default 140 when unknown). 16 bars @ 140 BPM ≈ 27s. */
+function beatBpm() { return (parentBeat && Number(parentBeat.bpm)) || 140; }
+function secPerBar() { return 4 * 60 / beatBpm(); }
+function barInfoText() {
+  if (barLen === 'free') return 'Free — tap ■ Stop when your verse is done.';
+  const secs = Math.round(barLen * secPerBar());
+  return barLen + ' bars @ ' + beatBpm() + ' BPM ≈ ' + secs + 's';
+}
+function paintBarInfo() { const el = $('mk-bar-info'); if (el) el.textContent = barInfoText(); }
+function updateBarsLeft() {
+  const el = $('mk-bars-left');
+  if (!el) return;
+  const elapsed = (Date.now() - startTs) / 1000;
+  if (barLen === 'free') { el.textContent = 'Recording… ' + fmt(elapsed * 1000) + ' (Free)'; return; }
+  const total = barLen * secPerBar();
+  const left = Math.max(0, total - elapsed);
+  const barsLeft = Math.max(0, barLen - Math.floor(elapsed / secPerBar()));
+  el.textContent = 'Bars left: ' + barsLeft + ' · ' + Math.ceil(left) + 's left';
+}
+document.querySelectorAll('.bar-chip').forEach(btn => {
+  btn.onclick = () => {
+    barLen = btn.getAttribute('data-bars') === 'free' ? 'free' : Number(btn.getAttribute('data-bars'));
+    document.querySelectorAll('.bar-chip').forEach(b => {
+      const on = b === btn;
+      b.classList.toggle('on', on);
+      b.classList.toggle('ghost', !on);
+    });
+    paintBarInfo();
+    drawWave(selectedTake || takes.find(t => t.id === bestTakeId) || null);
+  };
+});
+paintBarInfo();
+
+function pickBeat(b) {
+  parentBeat = b;
+  const loop = $('mk-loop');
+  loop.src = api.mediaUrl(b);
+  $('mk-parent').style.display = '';
+  $('mk-parent').innerHTML = '<div class="next-steps"><b>' + esc(b.title) + '</b>' +
+    '<p class="note">' + esc(b.genre) + (b.bpm ? ' · ' + esc(b.bpm) + ' BPM' : '') + '</p>' +
+    '<p style="margin-top:6px">' + Flow.verifyChip(b) + '</p>' +
+    '<p class="note" style="margin-top:6px">by <a href="creator.html?u=' + esc(b.userId) + '" style="color:var(--pur)">this producer</a> · <a href="beat.html?id=' + esc(b.id) + '" style="color:var(--pur)">open the beat →</a></p></div>';
+  Flow.verifyCards($('mk-parent'));
+  $('mk-rec').disabled = false;
+  $('mk-rec-status').textContent = 'Beat loaded — tap ● Record vocals. It loops while you rap.';
+  $('mk-title').value = $('mk-title').value || ('Song over ' + b.title);
+  const g = $('mk-genre');
+  if (b.genre) { const opt = Array.from(g.options).find(o => o.value.toLowerCase() === String(b.genre).toLowerCase()); if (opt) g.value = opt.value; }
+  $('mk-cosign-note').textContent = 'This beat is yours — your song publishes live immediately. This beat belongs to someone else — your song is saved as “Awaiting producer co-sign” and stays out of the public feed until they approve it.';
+  paintBarInfo();
+  drawWave(null);
+  $('mk-parent').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function renderResults(beats) {
+  const box = $('mk-results');
+  if (!beats || !beats.length) { box.innerHTML = '<p class="note">No beats found — try another search.</p>'; return; }
+  box.innerHTML = beats.filter(b => b.kind !== 'song').slice(0, 8).map(b =>
+    '<div style="padding:10px 0;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap">' +
+    '<span><b>' + esc(b.title) + '</b> <span class="note">' + esc(b.genre) + (b.bpm ? ' · ' + esc(b.bpm) + ' BPM' : '') + '</span><br>' + Flow.verifyChip(b) + '</span>' +
+    '<button class="btn small" data-pick="' + esc(b.id) + '">Pick this beat</button></div>'
+  ).join('');
+  Flow.verifyCards(box);
+  box.querySelectorAll('[data-pick]').forEach(btn => {
+    btn.onclick = async () => {
+      try { pickBeat(await api.beat(btn.getAttribute('data-pick'))); }
+      catch (e) { showErr('err', e.message); }
+    };
+  });
+}
+
+$('mk-search-go').onclick = async () => {
+  const q = $('mk-search').value.trim();
+  if (!q) return;
+  try { renderResults((await api.search(q)).beats || []); }
+  catch (e) { showErr('err', e.message); }
+};
+$('mk-search').addEventListener('keydown', e => { if (e.key === 'Enter') $('mk-search-go').click(); });
+$('mk-browse').onclick = async () => {
+  try { renderResults((await api.marketplace({ limit: 12 })).beats || []); }
+  catch (e) { showErr('err', e.message); }
+};
+
+// Deep link from a beat page: make.html?beat=<id>
+const presetId = new URLSearchParams(location.search).get('beat');
+if (presetId) {
+  api.beat(presetId).then(pickBeat).catch(e => showErr('err', e.message));
+}
+
+function drawMeter() {
+  if (!analyser) return;
+  const data = new Uint8Array(analyser.fftSize);
+  analyser.getByteTimeDomainData(data);
+  let peak = 0;
+  for (let i = 0; i < data.length; i++) peak = Math.max(peak, Math.abs(data[i] - 128) / 128);
+  $('mk-meterfill').style.width = Math.min(100, peak * 140) + '%';
+  meterRaf = requestAnimationFrame(drawMeter);
+}
+
+$('mk-rec').onclick = async () => {
+  if (!parentBeat) { showErr('mk-rec-err', 'Pick a beat first.'); return; }
+  if (mediaRec && mediaRec.state === 'recording') { stopRec(); return; }
+  // 1-bar count-in, at the beat's tempo (4 beats at its BPM). The
+  // metronome toggle adds one click per beat; off by default.
+  const beatMs = 60000 / beatBpm();
+  const metroOn = !!($('mk-metro') && $('mk-metro').checked);
+  $('mk-rec').disabled = true;
+  for (let n = 4; n >= 1; n--) {
+    $('mk-rec-status').textContent = 'Count-in… ' + n;
+    if (metroOn) metroClick();
+    await new Promise(r => setTimeout(r, beatMs));
+  }
+  $('mk-rec').disabled = false;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    await audioCtx.resume().catch(() => {});
+    if (audioCtx.state === 'suspended') await audioCtx.resume().catch(() => {});
+    const src = audioCtx.createMediaStreamSource(stream);
+    analyser = audioCtx.createAnalyser(); analyser.fftSize = 2048;
+    src.connect(analyser);
+    chunks = [];
+    mediaRec = new MediaRecorder(stream);
+    mediaRec.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+    mediaRec.onstop = onTake;
+    mediaRec.start();
+    startTs = Date.now();
+    const loop = $('mk-loop');
+    loop.currentTime = 0;
+    loop.play().catch(() => {});
+    // Timed window: auto-stop at the end of the bar count (Free = manual).
+    if (barLen !== 'free') {
+      const windowMs = barLen * secPerBar() * 1000;
+      stopTimer = setTimeout(() => {
+        if (mediaRec && mediaRec.state === 'recording') stopRec();
+      }, windowMs);
+      barsTimer = setInterval(updateBarsLeft, 250);
+      updateBarsLeft();
+    } else {
+      barsTimer = setInterval(updateBarsLeft, 250);
+      updateBarsLeft();
+    }
+    $('mk-rec-status').textContent = audioCtx.state === 'running' ? 'Recording — the beat is looping.' : 'Recording — level meter paused, take is still recording.';
+    $('mk-rec').textContent = '■ Stop';
+    $('mk-hint').textContent = barLen === 'free' ? 'Tap ■ Stop when your verse is done.' : 'Auto-stops at the end of ' + barLen + ' bars — or tap ■ Stop early.';
+    drawMeter();
+  } catch (e) {
+    showErr('mk-rec-err', 'Mic blocked: ' + e.message);
+    Volt.help("Mic's blocked. Click the lock icon in the address bar, allow the microphone, then try again.");
+  }
+};
+
+function stopRec() {
+  clearTimeout(stopTimer); stopTimer = null;
+  clearInterval(barsTimer); barsTimer = null;
+  cancelAnimationFrame(meterRaf);
+  $('mk-meterfill').style.width = '0%';
+  $('mk-bars-left').textContent = '';
+  $('mk-loop').pause();
+  if (mediaRec) mediaRec.stop();
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  if (audioCtx) { audioCtx.close().catch(() => {}); audioCtx = null; }
+  analyser = null;
+  $('mk-rec').textContent = '● Record vocals';
+  $('mk-rec-status').textContent = 'Take saved below — pick it to publish.';
+  $('mk-hint').textContent = 'Tap ● Record vocals for another take.';
+}
+
+function onTake() {
+  const blob = new Blob(chunks, { type: mediaRec.mimeType || 'audio/webm' });
+  const dur = Math.round((Date.now() - startTs) / 1000);
+  takeN++;
+  const take = { id: takeN, blob, dur, url: URL.createObjectURL(blob), parent: parentBeat };
+  takes.push(take);
+  // Best-of-3 retakes (booth finisher, Nov 13): keep at most 3 takes.
+  // A 4th take drops the oldest take that is neither the best nor the
+  // selected one — and the note says which one went.
+  if (takes.length > 3) {
+    const drop = takes.find(t => t.id !== bestTakeId && t !== selectedTake);
+    if (drop) {
+      takes = takes.filter(t => t !== drop);
+      const old = document.querySelector('#mk-takes .take[data-take="' + drop.id + '"]');
+      if (old) old.remove();
+      $('mk-rec-status').textContent = 'Take ' + take.id + ' saved — Take ' + drop.id + ' was dropped to keep your best 3.';
+    }
+  }
+  if (takeN === 1) $('mk-takes').innerHTML = '';
+  const div = document.createElement('div');
+  div.className = 'take';
+  div.setAttribute('data-take', String(take.id));
+  div.innerHTML = `<h4>Take ${takeN} · ${fmt(dur * 1000)}</h4><audio controls src="${take.url}" style="width:100%"></audio>
+    <p style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn small take-select">Select for publishing</button>
+    <button class="btn small ghost take-best">☆ Mark as best</button>
+    <button class="btn small ghost mix-btn">▶ Mix (beat + vocal)</button>
+    <button class="btn small ghost export-btn">Export mix (.wav)</button>
+    <button class="btn small ghost take-del">Delete</button></p>
+    <p class="note mix-note"></p>`;
+  const markBest = () => {
+    bestTakeId = take.id;
+    document.querySelectorAll('#mk-takes .take').forEach(t => {
+      const b = t.querySelector('.take-best');
+      if (b) b.textContent = Number(t.getAttribute('data-take')) === bestTakeId ? '★ Best take' : '☆ Mark as best';
+    });
+    paintPubTake();
+    drawWave(take);
+  };
+  div.querySelector('.take-select').onclick = () => {
+    selectedTake = take;
+    document.querySelectorAll('#mk-takes .take').forEach(t => t.style.borderColor = '');
+    div.style.borderColor = 'var(--pur)';
+    $('mk-pub-card').style.display = '';
+    paintPubTake();
+    drawWave(take);
+    $('mk-pub-card').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
+  div.querySelector('.take-best').onclick = markBest;
+  div.querySelector('.take-del').onclick = () => {
+    takes = takes.filter(t => t !== take);
+    if (selectedTake === take) selectedTake = null;
+    if (bestTakeId === take.id) bestTakeId = null;
+    div.remove();
+    if (!takes.length) {
+      $('mk-takes').innerHTML = '<p class="note">No takes yet.</p>';
+      $('mk-pub-card').style.display = 'none';
+    }
+    paintPubTake();
+  };
+  div.querySelector('.mix-btn').onclick = () => playMix(take, div);
+  div.querySelector('.export-btn').onclick = () => exportMix(take, div);
+  $('mk-takes').prepend(div);
+}
+
+/* True offline mix export (booth finisher, Nov 13): render the beat loop
+   under the vocal to a real .wav file with OfflineAudioContext — not just
+   the live Mix preview. If the beat audio cannot be fetched for offline
+   rendering (remote audio / CORS), the note says so honestly; the live
+   Mix preview above still works. */
+function encodeWav(buf) {
+  const numCh = Math.min(2, buf.numberOfChannels);
+  const len = buf.length * numCh * 2 + 44;
+  const out = new DataView(new ArrayBuffer(len));
+  const writeStr = (off, s) => { for (let i = 0; i < s.length; i++) out.setUint8(off + i, s.charCodeAt(i)); };
+  writeStr(0, 'RIFF'); out.setUint32(4, len - 8, true); writeStr(8, 'WAVE');
+  writeStr(12, 'fmt '); out.setUint32(16, 16, true); out.setUint16(20, 1, true);
+  out.setUint16(22, numCh, true); out.setUint32(24, buf.sampleRate, true);
+  out.setUint32(28, buf.sampleRate * numCh * 2, true); out.setUint16(32, numCh * 2, true);
+  out.setUint16(34, 16, true); writeStr(36, 'data'); out.setUint32(40, len - 44, true);
+  const chans = [];
+  for (let c = 0; c < numCh; c++) chans.push(buf.getChannelData(c));
+  let off = 44;
+  for (let i = 0; i < buf.length; i++) {
+    for (let c = 0; c < numCh; c++) {
+      const s = Math.max(-1, Math.min(1, chans[c][i]));
+      out.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+      off += 2;
+    }
+  }
+  return out.buffer;
+}
+async function exportMix(take, rowEl) {
+  const noteEl = rowEl.querySelector('.mix-note');
+  const btn = rowEl.querySelector('.export-btn');
+  btn.disabled = true;
+  noteEl.textContent = 'Rendering mix…';
+  try {
+    const beatUrl = api.mediaUrl(take.parent);
+    const [beatBuf, vocBuf] = await Promise.all([
+      fetch(beatUrl).then(r => { if (!r.ok) throw new Error('beat fetch ' + r.status); return r.arrayBuffer(); }),
+      take.blob.arrayBuffer(),
+    ]);
+    const tmp = new (window.AudioContext || window.webkitAudioContext)();
+    const [beatDec, vocDec] = await Promise.all([
+      tmp.decodeAudioData(beatBuf),
+      tmp.decodeAudioData(vocBuf),
+    ]);
+    await tmp.close().catch(() => {});
+    const off = new OfflineAudioContext(2, Math.ceil(vocDec.duration * 44100), 44100);
+    const beatSrc = off.createBufferSource();
+    beatSrc.buffer = beatDec; beatSrc.loop = true;
+    const vocSrc = off.createBufferSource();
+    vocSrc.buffer = vocDec;
+    beatSrc.connect(off.destination);
+    vocSrc.connect(off.destination);
+    beatSrc.start(0);
+    vocSrc.start(0);
+    const rendered = await off.startRendering();
+    const safe = String(take.parent.title || 'song').replace(/[^a-z0-9-_ ]/gi, '').trim() || 'song';
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([encodeWav(rendered)], { type: 'audio/wav' }));
+    a.download = 'Song over ' + safe + ' - Take ' + take.id + ' mix.wav';
+    a.click();
+    noteEl.textContent = 'Mix exported — a .wav of the beat looped under your vocal. Keep it, share it, release it.';
+  } catch (e) {
+    noteEl.textContent = 'Mix export failed in this browser — the beat audio could not be loaded for offline rendering (remote audio / CORS). The live Mix preview above still works.';
+  } finally { btn.disabled = false; }
+}
+
+/* Mixed preview (Nov 13): the parent beat looped under the vocal, in
+   sync. First try: Web Audio — both tracks decoded and started on the
+   same clock, sample-accurate. If the browser can't fetch/decode the
+   beat (remote audio, CORS), fall back to two <audio> elements started
+   together and say so honestly — "rough sync", it may drift. The dry
+   vocal is the take's own <audio controls> above. */
+function stopMix() {
+  mixCtxNodes.forEach(n => { try { n.stop(); } catch (e) {} });
+  mixCtxNodes = [];
+  mixHtml.forEach(a => { try { a.pause(); } catch (e) {} });
+  mixHtml = [];
+  if (mixCtx) { mixCtx.close().catch(() => {}); mixCtx = null; }
+  document.querySelectorAll('.mix-btn').forEach(b => { b.textContent = '▶ Mix (beat + vocal)'; });
+  document.querySelectorAll('.mix-note').forEach(n => { n.textContent = ''; });
+}
+async function playMix(take, rowEl) {
+  if (mixCtxNodes.length || mixHtml.length) { stopMix(); return; }
+  const noteEl = rowEl.querySelector('.mix-note');
+  const btn = rowEl.querySelector('.mix-btn');
+  btn.textContent = '■ Stop mix';
+  noteEl.textContent = 'Loading mix…';
+  try {
+    const beatUrl = api.mediaUrl(take.parent);
+    const [beatBuf, vocBuf] = await Promise.all([
+      fetch(beatUrl).then(r => { if (!r.ok) throw new Error('beat fetch ' + r.status); return r.arrayBuffer(); }),
+      take.blob.arrayBuffer(),
+    ]);
+    mixCtx = new (window.AudioContext || window.webkitAudioContext)();
+    await mixCtx.resume().catch(() => {});
+    const [beatDec, vocDec] = await Promise.all([
+      mixCtx.decodeAudioData(beatBuf),
+      mixCtx.decodeAudioData(vocBuf),
+    ]);
+    const beatSrc = mixCtx.createBufferSource();
+    beatSrc.buffer = beatDec; beatSrc.loop = true;
+    const vocSrc = mixCtx.createBufferSource();
+    vocSrc.buffer = vocDec;
+    beatSrc.connect(mixCtx.destination);
+    vocSrc.connect(mixCtx.destination);
+    const t = mixCtx.currentTime + 0.1;
+    beatSrc.start(t);
+    vocSrc.start(t);
+    mixCtxNodes = [beatSrc, vocSrc];
+    vocSrc.onended = () => stopMix();
+    noteEl.textContent = 'Mix preview — beat looped under your vocal, sample-synced.';
+  } catch (e) {
+    // Web Audio could not lock the two tracks — rough-sync fallback.
+    stopMix();
+    try {
+      const beatA = new Audio(api.mediaUrl(take.parent));
+      beatA.loop = true;
+      const vocA = new Audio(take.url);
+      mixHtml = [beatA, vocA];
+      vocA.onended = () => stopMix();
+      await Promise.all([beatA.play(), vocA.play()]);
+      btn.textContent = '■ Stop mix';
+      noteEl.textContent = 'Mix preview — rough sync: this browser could not lock the two tracks sample-accurately, so they may drift apart.';
+    } catch (e2) {
+      noteEl.textContent = 'Mix preview failed in this browser — play the beat and the take separately above.';
+    }
+  }
+}
+
+$('mk-pub-go').onclick = async () => {
+  try {
+    if (!api.loggedIn()) throw new Error('Sign in first — open the Upload page to sign in, then come back.');
+    if (!parentBeat) throw new Error('Pick a beat first.');
+    // Publish the selected take — or the best take, if one is marked.
+    const pubTake = selectedTake || takes.find(t => t.id === bestTakeId) || takes[takes.length - 1];
+    if (!pubTake) throw new Error('Select a take first.');
+    const title = $('mk-title').value.trim();
+    if (!title) throw new Error('Song title is required.');
+    $('mk-pub-go').disabled = true; $('mk-pub-go').textContent = 'Publishing…';
+    const ext = (pubTake.blob.type.split('/')[1] || 'webm').split(';')[0];
+    const file = new File([pubTake.blob], `song-take-${pubTake.id}.${ext}`, { type: pubTake.blob.type });
+    const fd = new FormData();
+    fd.append('audio', file);
+    fd.append('title', title);
+    fd.append('genre', $('mk-genre').value);
+    fd.append('price', '0');
+    fd.append('dur', String(pubTake.dur));
+    fd.append('kind', 'song');
+    fd.append('parentBeatId', parentBeat.id);
+    const song = await api.upload(fd);
+    const pending = song.coSignStatus === 'pending';
+    $('mk-pub-done').innerHTML = `<div class="badge ${pending ? 'wait' : 'ok'}" style="margin-top:14px">${pending ? '⏳ Awaiting producer co-sign' : '✓ Published & fingerprinted'}</div>
+      <p class="note" style="margin-top:8px">${pending
+        ? 'Saved, but not in the public feed yet — the parent beat’s producer has to approve it first. You and the producer can see it now.'
+        : 'Your song is live in the feed, linked to the parent beat.'}</p>
+      <p class="note"><a href="beat.html?id=${esc(song.id)}" style="color:var(--pur)">View your song →</a></p>
+      <p style="margin-top:10px"><button class="btn ghost small" id="mk-share-song">Share this song</button> <span class="note" id="mk-share-note"></span></p>`;
+    const shareBtn = document.getElementById('mk-share-song');
+    if (shareBtn) shareBtn.onclick = async () => {
+      try {
+        document.getElementById('mk-share-note').textContent = await Flow.shareBeat({
+          id: song.id, title, kind: 'song', fingerprint: song.fingerprint || '',
+          parentBeat: { title: parentBeat.title },
+        });
+      } catch {
+        document.getElementById('mk-share-note').textContent = 'Share failed — copy the song link from the address bar instead.';
+      }
+    };
+    const next = document.createElement('div');
+    $('mk-pub-done').after(next);
+    Flow.nextSteps(next, {
+      title: pending ? 'Song saved — waiting on the producer.' : 'Your song is live — what next?',
+      text: pending ? 'The producer gets the co-sign request on their beat. Nothing is public until they approve.' : 'It is in the feed now, linked to the parent beat.',
+      actions: [
+        { label: 'View your song', href: 'beat.html?id=' + encodeURIComponent(song.id) },
+        { label: 'View the parent beat', href: 'beat.html?id=' + encodeURIComponent(parentBeat.id), ghost: true },
+        { label: 'View & list licenses', href: 'beat.html?id=' + encodeURIComponent(parentBeat.id) + '#buy', ghost: true },
+      ],
+    });
+  } catch (e) { showErr('mk-pub-err', e.message); Volt.help("That song publish didn't go through. Check you're signed in and a take is selected, then try again."); }
+  finally { $('mk-pub-go').disabled = false; $('mk-pub-go').textContent = 'Publish song'; }
+};
+</script>
+</body>
+</html>

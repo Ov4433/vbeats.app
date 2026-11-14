@@ -11,8 +11,6 @@
   .bat-pick { text-align:left; padding:14px; border-radius:14px; border:1px solid var(--line); background:rgba(255,255,255,.02); cursor:pointer; color:inherit; width:100%; }
   .bat-pick.on { border-color:var(--gold, #e8b64c); box-shadow:0 0 0 1px var(--gold, #e8b64c) inset; }
   .bat-dot { display:inline-flex; align-items:center; justify-content:center; width:38px; height:38px; border-radius:50%; font-weight:800; font-size:18px; color:#0b0b10; margin-bottom:8px; }
-  .step { display:flex; gap:12px; margin-top:14px; }
-  .step-n { flex:0 0 28px; height:28px; border-radius:50%; background:var(--gold, #e8b64c); color:#0b0b10; font-weight:800; display:flex; align-items:center; justify-content:center; }
   .bar { height:10px; border-radius:6px; background:rgba(255,255,255,.08); overflow:hidden; margin-top:8px; }
   .bar > div { height:100%; background:linear-gradient(90deg,#b04df0,#e8b64c); width:0%; transition:width .6s; }
 </style>
@@ -23,9 +21,12 @@
   <div class="page-head"><div>
     <h1>🎟️ The Volt Pass</h1>
     <p>The Founding Producer Pass for Verified Beats Studio. Hold <b>10 VBEATS</b>, claim your pass, pick your bat — that's your home screen now.</p>
+    <p class="note" style="margin-top:6px"><b>Cost: one signature, no gas.</b> Unlocks early upload access, a showcase date (at 100 members), the Founding Producer badge, and your first export gasless.</p>
   </div></div>
 
   <div id="msg"></div>
+  <div id="claim-next"></div>
+  <div id="chain-explainer"></div>
 
   <div class="card" style="margin-top:16px">
     <h3 style="margin-bottom:6px">👥 Founding members</h3>
@@ -36,21 +37,31 @@
 
   <div class="card" style="margin-top:16px">
     <h3 style="margin-bottom:6px">🛒 Don't hold VBEATS yet?</h3>
-    <div class="step"><div class="step-n">1</div><div>
-      <b>Set up your wallet</b>
-      <p class="note">Use the studio's Coinbase link — it carries the promo code:</p>
-      <p style="margin-top:6px"><a class="btn" href="https://coinbase.com/join/CSH9PJ8?src=android-link" target="_blank" rel="noopener">Open Coinbase →</a></p>
-    </div></div>
-    <div class="step"><div class="step-n">2</div><div>
-      <b>Move ETH to Robinhood Chain</b>
-      <p class="note">VBEATS trades on Robinhood Chain. Bridge a little ETH from Base with Relay — it lands in seconds. Only ever use this official link; fake bridge sites are a known scam.</p>
-      <p style="margin-top:6px"><a class="btn" href="https://relay.link" target="_blank" rel="noopener">Open Relay →</a></p>
-    </div></div>
-    <div class="step"><div class="step-n">3</div><div>
-      <b>Buy at least 10 VBEATS</b>
-      <p class="note">On Pons, at whatever the market price is.</p>
-      <p style="margin-top:6px"><a class="btn" href="https://ponsfamily.com" target="_blank" rel="noopener">Open Pons →</a></p>
-    </div></div>
+    <p class="note">Your progress is detected from your wallet — finished steps are skipped automatically.</p>
+    <div id="pass-stepper">
+      <div class="pass-step" data-step="wallet"><div class="step-n">1</div><div>
+        <b>Connect your wallet</b>
+        <p class="note">The pass mints to the wallet that holds your VBEATS.</p>
+      </div></div>
+      <div class="pass-step" data-step="buy"><div class="step-n">2</div><div>
+        <b>Hold at least 10 VBEATS</b>
+        <p class="note">Buy on Pons — VBEATS trades on Robinhood Chain. Bridge a little ETH from Base with Relay; it lands in seconds. Only ever use the official Relay link; fake bridge sites are a known scam.</p>
+        <p style="margin-top:6px"><a class="btn small ghost" href="https://relay.link" target="_blank" rel="noopener">Open Relay →</a>
+        <a class="btn small ghost" href="https://ponsfamily.com" target="_blank" rel="noopener">Open Pons →</a></p>
+      </div></div>
+      <div class="pass-step" data-step="bat"><div class="step-n">3</div><div>
+        <b>Pick your bat</b>
+        <p class="note">Your bat becomes your home screen. You can change it anytime in Profile.</p>
+      </div></div>
+      <div class="pass-step" data-step="claim"><div class="step-n">4</div><div>
+        <b>Claim — one signature, no gas</b>
+        <p class="note">The pass is soulbound. 1,000 passes, ever.</p>
+      </div></div>
+    </div>
+    <details style="margin-top:14px"><summary style="cursor:pointer;font-weight:700">Need a wallet?</summary>
+      <p class="note" style="margin-top:8px">Set one up with the studio's Coinbase link — it carries the promo code:</p>
+      <p style="margin-top:6px"><a class="btn small" href="https://coinbase.com/join/CSH9PJ8?src=android-link" target="_blank" rel="noopener">Open Coinbase →</a></p>
+    </details>
   </div>
 
   <div class="card" style="margin-top:16px" id="claim-card">
@@ -67,11 +78,8 @@
   </div>
 </main>
 <footer class="footer"><div class="footer-bat"><img src="assets/mascot-profile.webp" alt=""></div>Verified Beats Studio — Volt keeps the receipts.</footer>
-<script src="js/ethers.min.js"></script>
-<script>if (typeof ethers === 'undefined') document.write('<script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.min.js"><\/script>');</script>
-<script>if (typeof ethers === 'undefined') document.write('<script src="https://unpkg.com/ethers@6.13.4/dist/ethers.min.js"><\/script>');</script>
-<script>if (typeof ethers === 'undefined') document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.4/ethers.umd.min.js"><\/script>');</script>
 <script src="js/api.js"></script>
+<script src="js/flow.js"></script>
 <script src="js/volt.js"></script>
 <script>
 nav('claim.html');
@@ -110,19 +118,36 @@ async function walletState() {
   return { me, elig };
 }
 
+/* Pass stepper: detects what the wallet already has and skips finished
+   steps (Claude). state: { wallet, balance, hasPass, bat } */
+function setStepper(s) {
+  const steps = { wallet: !!s.wallet, buy: (s.balance != null && Number(s.balance) >= 10) || !!s.hasPass, bat: !!s.bat || !!s.hasPass, claim: !!s.hasPass };
+  const order = ['wallet', 'buy', 'bat', 'claim'];
+  let currentSet = false;
+  order.forEach(k => {
+    const el = document.querySelector('.pass-step[data-step="' + k + '"]');
+    if (!el) return;
+    el.classList.remove('done', 'current');
+    if (steps[k]) { el.classList.add('done'); el.querySelector('.step-n').textContent = '✓'; }
+    else if (!currentSet) { el.classList.add('current'); currentSet = true; }
+  });
+}
+
 function batPickerHtml() {
   return '<p style="margin-top:12px"><b>Pick your bat</b> — it becomes your home screen:</p><div class="bat-grid">' +
     BATS.map(b =>
       '<button class="bat-pick' + (selectedBat === b.id ? ' on' : '') + '" data-bat="' + b.id + '">' +
       '<span class="bat-dot" style="background:' + b.color + '">' + b.name[0] + '</span><br>' +
       '<b>' + b.name + '</b> · ' + b.role + '<br><span class="note">' + b.desc + '</span></button>'
-    ).join('') + '</div>';
+    ).join('') + '</div>' +
+    '<p class="note" style="margin-top:8px"><a href="#" id="bat-skip" style="color:var(--pur)">Skip for now — use Volt (change it in Profile later)</a></p>';
 }
 
 async function renderClaim() {
   const body = document.getElementById('claim-body');
   if (!status) { body.innerHTML = '<p class="note">Checking claim status…</p>'; return; }
   if (!address) {
+    setStepper({ wallet: false });
     body.innerHTML = '<p class="note">Connect the wallet that holds your VBEATS. The pass mints to that same address on Base — no gas, no transaction on your side, just one signature to prove the wallet is yours.</p>' +
       '<div style="margin-top:12px"><button class="btn" id="connect">Connect wallet</button></div>';
     document.getElementById('connect').onclick = connect;
@@ -131,6 +156,7 @@ async function renderClaim() {
   body.innerHTML = '<p class="note">Connected: <span class="mono">' + address + '</span> — checking…</p>';
   const { me, elig } = await walletState();
   if (me && me.hasPass) {
+    setStepper({ wallet: true, balance: 10, hasPass: true, bat: true });
     const bat = BATS.find(b => b.id === me.bat);
     body.innerHTML =
       '<p style="font-size:20px"><b>🎟️ You\'re member #' + esc(me.memberNumber) + '</b></p>' +
@@ -145,13 +171,18 @@ async function renderClaim() {
     return;
   }
   if (elig && !elig.eligible) {
+    // Progress is surfaced even at 2–3 VBEATS (Grok), not just at 10.
+    const bal = elig.balance != null ? elig.balance : elig.balanceFormatted;
+    setStepper({ wallet: true, balance: bal });
     body.innerHTML =
       '<p>This wallet holds <b>' + esc(elig.balanceFormatted) + ' VBEATS</b> — the pass needs <b>' + esc(elig.threshold) + '</b>.</p>' +
+      Flow.passProgressHtml(bal, elig.threshold || 10) +
       '<p class="note" style="margin-top:6px">Top up on Pons (steps above), then come back — the claim takes one signature.</p>' +
       '<div style="margin-top:12px"><button class="btn" id="recheck">Check again</button></div>';
     document.getElementById('recheck').onclick = renderClaim;
     return;
   }
+  setStepper({ wallet: true, balance: 10, bat: !!selectedBat });
   body.innerHTML =
     '<p>✅ This wallet holds <b>' + esc(elig ? elig.balanceFormatted : '10+') + ' VBEATS</b> — you\'re eligible.</p>' +
     batPickerHtml() +
@@ -162,6 +193,13 @@ async function renderClaim() {
     localStorage.setItem('vbeats_bat', selectedBat);
     renderClaim();
   });
+  const skip = document.getElementById('bat-skip');
+  if (skip) skip.onclick = e => {
+    e.preventDefault();
+    selectedBat = 'volt';
+    localStorage.setItem('vbeats_bat', selectedBat);
+    renderClaim();
+  };
   const claimBtn = document.getElementById('claim');
   if (claimBtn) claimBtn.onclick = doClaim;
 }
@@ -195,6 +233,15 @@ async function doClaim() {
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error((data && data.error && data.error.message) || ('Claim failed (HTTP ' + res.status + ')'));
     setMsg('<div class="card" style="border-color:var(--gold,#e8b64c)"><b>🎟️ Pass claimed — you\'re member #' + esc(data.memberNumber) + '.</b><br><span class="note">Welcome to the founding producers. Volt keeps the receipts. 🦇</span></div>');
+    Flow.nextSteps(document.getElementById('claim-next'), {
+      title: 'Your pass is live — what next?',
+      text: 'Your bat is your home screen now. Drop a beat, or see the founding members.',
+      actions: [
+        { label: 'Open the studio', href: 'studio.html' },
+        { label: 'Drop a beat', href: 'upload.html', ghost: true },
+        { label: 'See your profile', href: 'profile.html', ghost: true },
+      ],
+    });
     await loadStatus();
   } catch (e) {
     setMsg(errBox(e.message || String(e)));
@@ -202,6 +249,7 @@ async function doClaim() {
   }
 }
 
+document.getElementById('chain-explainer').innerHTML = Flow.chainExplainerHtml();
 loadStatus();
 </script>
 </body>

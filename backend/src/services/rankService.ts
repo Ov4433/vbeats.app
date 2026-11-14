@@ -87,3 +87,19 @@ export async function playCounts(): Promise<PlayCounts> {
   }
   return { plays, uniqueListeners };
 }
+
+/**
+ * Play counts inside a time window (e.g. the current UTC week) — the
+ * honest input for "Trending this week". One groupBy, no N+1.
+ */
+export async function playCountsInWindow(
+  start: Date,
+  end: Date
+): Promise<Map<string, number>> {
+  const totals = await prisma.play.groupBy({
+    by: ['beatId'],
+    where: { createdAt: { gte: start, lt: end } },
+    _count: { beatId: true },
+  });
+  return new Map(totals.map((t) => [t.beatId, t._count.beatId]));
+}

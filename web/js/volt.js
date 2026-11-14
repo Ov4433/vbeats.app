@@ -6,7 +6,7 @@
     'index.html': [
       { sel: '.stories', text: "Welcome to <b>Verified Beats Studio</b>. I'm <b>Volt</b> — night-shift manager. Quick moves live up here: record, upload, your pass." },
       { sel: '.feed', text: "This is the <b>feed</b>. Every beat in it is <b>fingerprinted and verified on-chain</b>. No fakes get past me." },
-      { sel: '.post', text: "Hit play right in the feed — or tap <b>Lease / Mint</b> to open the beat's card: receipt, offers, all of it." },
+      { sel: '.post', text: "Hit play right in the feed — or tap <b>Buy license</b> to open the beat's card: receipt, offers, all of it." },
       { sel: '.tabbar', text: "Home, Explore, Record, Cards, Profile — the whole app lives down here now." },
       { sel: '.tabbar .rec-btn', text: "That big red button? The studio. Tour over — go make noise. 🦇" },
     ],

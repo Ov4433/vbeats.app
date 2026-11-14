@@ -76,7 +76,7 @@ export default function RecordBeatScreen({ navigation }: any) {
     }
 
     try {
-      await create(
+      const newBeat = await create(
         {
           title,
           description,
@@ -87,10 +87,21 @@ export default function RecordBeatScreen({ navigation }: any) {
         recorder.recordingData.uri
       );
 
-      Alert.alert('Success', 'Beat uploaded successfully!', [
+      // Post-publish next steps (Nov 13): View beat, or record another.
+      // "View beat" goes to the new beat's page; "Record another" clears
+      // the form so a fresh take starts clean.
+      Alert.alert('Beat published', 'Your beat is live — what next?', [
         {
-          text: 'OK',
-          onPress: () => navigation.navigate('Beats'),
+          text: 'View beat',
+          onPress: () => navigation.navigate('BeatDetail', { beatId: newBeat.id }),
+        },
+        {
+          text: 'Record another',
+          onPress: () => {
+            setTitle('');
+            setDescription('');
+            setBpm('');
+          },
         },
       ]);
     } catch (err) {
@@ -136,8 +147,12 @@ export default function RecordBeatScreen({ navigation }: any) {
         </View>
       </View>
 
-      {/* Beat Details Section */}
-      <View style={styles.section}>
+      {/* Beat Details Section — dimmed until a take exists (Nov 13):
+          Record → Title/genre/price → Publish, in that order. */}
+      {!recorder.recordingData && (
+        <Text style={styles.dimHint}>Record a take first — the details unlock once you have one.</Text>
+      )}
+      <View style={[styles.section, !recorder.recordingData && styles.dimmed]} pointerEvents={recorder.recordingData ? 'auto' : 'none'}>
         <Text style={styles.sectionTitle}>📝 Beat Details</Text>
 
         <Text style={styles.label}>Title *</Text>
@@ -226,6 +241,7 @@ export default function RecordBeatScreen({ navigation }: any) {
         <Button
           title={beatLoading ? 'Uploading...' : 'Upload Beat'}
           onPress={handleUploadBeat}
+          disabled={!recorder.recordingData || beatLoading}
           style={styles.uploadButton}
         />
       </View>
@@ -361,5 +377,13 @@ const styles = StyleSheet.create({
   },
   uploadButton: {
     marginTop: 8,
+  },
+  dimmed: {
+    opacity: 0.45,
+  },
+  dimHint: {
+    color: '#888',
+    fontSize: 13,
+    marginBottom: 10,
   },
 });

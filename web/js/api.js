@@ -45,6 +45,37 @@ window.VBEATS_NFT_ADDRESS = window.VBEATS_NFT_ADDRESS || '0x863A85ee5E542AB126a8
 window.VBEATS_OFFERS_ADDRESS = window.VBEATS_OFFERS_ADDRESS || '0x64e75daee8eaF13143082A8A04BCA9CF9b3DD848';
 
 // Minimal BeatOffers ABI for the actions the site performs.
+// Minimal BeatNFT ABI for the actions the site performs: direct buy.
+// buy() is real and Hardhat-tested, but it only works when the producer
+// set a price AND stocked licenses — so buyLicense() re-reads the live
+// listing price on-chain and refuses (with a plain message) when the beat
+// is not listed, instead of sending a transaction that must revert.
+// Direct buy pays the producer the full listed price: BeatNFT takes no
+// platform fee on this path, and the 10% royalty is EIP-2981 secondary
+// only — neither is added to the total shown to the buyer.
+//
+// --- PLATFORM FEE — NOT SET (Star decision open, Nov 13) -----------------
+// The three options are: (a) add a fee to the BeatNFT contract, (b) accept
+// 0% on direct buys, (c) route buys through BeatEscrow (which takes a
+// fee). Until Star picks one, direct buys pay the producer the FULL listed
+// price and the fee stays 0 — this constant is the single hook where the
+// chosen fee gets wired in (contract + dashboard copy), so nothing else
+// has to change. The dashboard and buy panel both read it and show the
+// fee as undecided; nothing here ever implies a fee is being taken.
+window.VBEATS_PLATFORM_FEE = { bps: 0, status: 'undecided' };
+const BEAT_NFT_ABI = [
+  'function buy(bytes32 fingerprint, bool exclusive, uint256 amount) payable',
+  'function licensePrice(uint256 tokenId) view returns (uint256)',
+  'function leaseTokenId(bytes32 fingerprint) view returns (uint256)',
+  'function exclusiveTokenId(bytes32 fingerprint) view returns (uint256)',
+  'function balanceOf(address account, uint256 tokenId) view returns (uint256)',
+  // Producer listing (money path, Nov 13): setPrice + stockForSale are the
+  // two on-chain calls that make a beat buyable. listBeat() below runs
+  // them in order; the BeatNFT contract itself is untouched.
+  'function setPrice(bytes32 fingerprint, bool exclusive, uint256 priceWei)',
+  'function stockForSale(bytes32 fingerprint, bool exclusive, uint256 amount)',
+];
+
 const BEAT_OFFERS_ABI = [
   'function makeOffer(address nft, bytes32 fingerprint, bool exclusive, uint256 amount, uint64 durationSeconds) payable returns (uint256)',
   'function makeFinalOffer(address nft, bytes32 fingerprint, bool exclusive, uint256 amount) payable returns (uint256)',
@@ -125,11 +156,30 @@ const api = {
     return this.get('/v1/beats/marketplace?' + q.toString());
   },
   beat(id) { return this.get('/v1/beats/' + encodeURIComponent(id)); },
+  search(q) { return this.get('/v1/beats/search?q=' + encodeURIComponent(q || '')); },
+  pendingCoSign() { return this.get('/v1/beats/pending-co-sign'); },
+  coSign(id, action) { return this.post('/v1/beats/' + encodeURIComponent(id) + '/co-sign', { action }); },
+  // Feature / co-sign requests (Nov 13): singer asks the parent beat's
+  // producer to feature the song. 404 = old backend — callers show an
+  // honest "needs the latest backend" note, never a fake success.
+  requestFeature(songId, message) { return this.post('/v1/features', { songId, message }); },
+  featureInbox() { return this.get('/v1/features/inbox'); },
+  featureSent() { return this.get('/v1/features/sent'); },
+  respondFeature(id, action) { return this.post('/v1/features/' + encodeURIComponent(id) + '/respond', { action }); },
   vote(id) { return this.post('/v1/beats/' + encodeURIComponent(id) + '/vote', {}); },
   topVoted() { return this.get('/v1/beats/top-voted'); },
   verify(id) { return this.post('/v1/beats/' + encodeURIComponent(id) + '/verify', {}); },
+  verifyBatch(ids) { return this.post('/v1/beats/verify-batch', { ids }); },
   nft(id) { return this.get('/v1/beats/' + encodeURIComponent(id) + '/nft'); },
   offers(id) { return this.get('/v1/beats/' + encodeURIComponent(id) + '/offers'); },
+  // Money path (Nov 13): producer dashboard + purchase receipts.
+  // 404 = old backend — callers show an honest "needs the latest
+  // backend" note, never invented earnings.
+  dashboard() { return this.get('/v1/transactions/dashboard'); },
+  myTransactions() { return this.get('/v1/transactions'); },
+  recordPurchase(beatId, txHash, amountEth, licenseKind) {
+    return this.post('/v1/transactions', { beatId, txHash, amountEth, licenseKind });
+  },
   play(id, listenedSec) {
     return this.post('/v1/beats/' + encodeURIComponent(id) + '/play', { listenedSec }).catch(() => null);
   },
@@ -197,6 +247,83 @@ const api = {
     return new ethers.Contract(window.VBEATS_OFFERS_ADDRESS, BEAT_OFFERS_ABI, signerOrProvider);
   },
 
+  nftContract(signerOrProvider) {
+    if (!window.VBEATS_NFT_ADDRESS) throw new Error('NFT contract is not deployed yet');
+    if (typeof ethers === 'undefined') throw new Error('Wallet library failed to load');
+    return new ethers.Contract(window.VBEATS_NFT_ADDRESS, BEAT_NFT_ABI, signerOrProvider);
+  },
+
+  /** Direct buy of a listed license: re-reads the live price + stock from
+      the contract, then calls BeatNFT.buy with the exact total. Throws a
+      plain message when the beat is not listed for instant buy (the buyer
+      should use the offer flow instead). Returns the tx hash. If the
+      Base chain itself cannot be reached, it says so plainly — the buyer
+      can still make an offer, which does not need the listing read. */
+  async buyLicense(fingerprint, exclusive, amount) {
+    if (!fingerprint) throw new Error('Beat not loaded yet');
+    amount = exclusive ? 1 : Math.max(1, Math.floor(Number(amount) || 1));
+    await ensureEthers();
+    const provider = new ethers.JsonRpcProvider(window.VBEATS_RPC_URL);
+    const read = this.nftContract(provider);
+    const fp = this.fpHex(fingerprint);
+    let tokenId, price, stock;
+    try {
+      tokenId = await read.licenseTokenId(fp, exclusive);
+      [price, stock] = await Promise.all([
+        read.licensePrice(tokenId),
+        read.balanceOf(window.VBEATS_NFT_ADDRESS, tokenId),
+      ]);
+    } catch (e) {
+      throw new Error('Base chain is unreachable right now — the listing could not be checked. You can still make an offer below, or retry in a minute.');
+    }
+    if (price <= 0n) throw new Error('This beat is not listed for instant buy — the producer has not set a price yet. Make an offer instead.');
+    if (stock < BigInt(amount)) throw new Error('Not enough licenses in stock for instant buy — make an offer instead.');
+    const total = price * BigInt(amount);
+    const signer = await this.getSigner();
+    const c = this.nftContract(signer);
+    const tx = await c.buy(fp, exclusive, amount, { value: total });
+    if (window.Flow) Flow.txPending('Buying your license');
+    await tx.wait();
+    if (window.Flow) Flow.txConfirmed('License bought', tx.hash);
+    return tx.hash;
+  },
+
+  /** Producer listing (money path, Nov 13): set a price AND stock
+      licenses on the BeatNFT contract, so the beat becomes instantly
+      buyable. Two transactions per license type (setPrice, then
+      stockForSale), in order — a price with no stock still cannot be
+      bought. Pass { leasePriceEth, leaseStock, exclusivePriceEth };
+      any type left out is left alone. Returns the tx hashes. The
+      contract is not changed by this — it only calls the functions the
+      producer already owns. */
+  async listBeat(fingerprint, opts = {}) {
+    if (!fingerprint) throw new Error('Beat not loaded yet');
+    const fp = this.fpHex(fingerprint);
+    const signer = await this.getSigner();
+    const c = this.nftContract(signer);
+    const hashes = [];
+    const listOne = async (exclusive, priceEth, stock) => {
+      const priceWei = ethers.parseEther(String(priceEth));
+      if (window.Flow) Flow.txPending(exclusive ? 'Setting exclusive price' : 'Setting lease price');
+      const t1 = await c.setPrice(fp, exclusive, priceWei);
+      await t1.wait();
+      hashes.push(t1.hash);
+      if (window.Flow) Flow.txPending(exclusive ? 'Stocking the exclusive' : 'Stocking leases');
+      const t2 = await c.stockForSale(fp, exclusive, Math.max(1, Math.floor(Number(stock) || 1)));
+      await t2.wait();
+      hashes.push(t2.hash);
+      if (window.Flow) Flow.txConfirmed(exclusive ? 'Exclusive listed' : 'Leases listed', t2.hash);
+    };
+    if (opts.leasePriceEth != null && Number(opts.leasePriceEth) > 0) {
+      await listOne(false, opts.leasePriceEth, opts.leaseStock || 1);
+    }
+    if (opts.exclusivePriceEth != null && Number(opts.exclusivePriceEth) > 0) {
+      await listOne(true, opts.exclusivePriceEth, 1);
+    }
+    if (!hashes.length) throw new Error('Enter a lease price or an exclusive price to list.');
+    return hashes;
+  },
+
   /** On-chain producer (beat owner) for a fingerprint, via the registry. */
   async producerOf(fingerprint) {
     if (!window.VBEATS_REGISTRY_ADDRESS || !fingerprint) return null;
@@ -223,7 +350,9 @@ const api = {
     const c = this.offersContract(signer);
     const overrides = valueWei ? { value: valueWei } : {};
     const tx = await c[method](...args, overrides);
+    if (window.Flow) Flow.txPending('Offer sent');
     await tx.wait();
+    if (window.Flow) Flow.txConfirmed('Offer confirmed on-chain', tx.hash);
     return tx.hash;
   },
 };
@@ -285,10 +414,13 @@ function solanaCreationsHtml(address) {
 }
 
 function nav(active) {
+  // Unified nav (Grok flow + Claude 4-destination cut): Explore, Create,
+  // Collect, Profile. Live / Chat / Upload / Console are demoted — still
+  // reachable by direct link, but they no longer compete on first visit.
+  // Console is developer tooling; regular users should never see it.
   const links = [
-    ['index.html', 'Home'], ['marketplace.html', 'Explore'],
-    ['studio.html', 'Studio'], ['live.html', 'Live'], ['chat.html', 'Chat'], ['upload.html', 'Upload'],
-    ['claim.html', 'Volt Pass'], ['deploy.html', 'Console'],
+    ['index.html', 'Explore'], ['studio.html', 'Create'], ['make.html', 'Make'],
+    ['cards.html', 'Collect'], ['profile.html', 'Profile'],
   ];
   const el = document.getElementById('nav');
   el.innerHTML =
@@ -296,9 +428,19 @@ function nav(active) {
     '<a class="brand" href="index.html"><img src="assets/logo.png" alt="logo"><span>Verified Beats Studio</span></a>' +
     '<div class="nav-links">' +
     links.map(([h, t]) => `<a href="${h}" class="${h === active ? 'on' : ''}">${t}</a>`).join('') +
-    '</div><div class="nav-right" id="nav-user"></div></div>';
+    '</div><span class="chain-pill" title="Beats register on Base. VBEATS trades on Robinhood Chain — see the chain explainer at the bottom of the page.">Base</span><div class="nav-right" id="nav-user"></div></div>';
   renderUser();
   tabbar(active);
+  // Help Center + SafeLock links on every page footer (one place, so no
+  // page can drift out of date). Skip if a page already added them.
+  document.querySelectorAll('.footer').forEach(f => {
+    if (f.querySelector('[data-foot-links]')) return;
+    const d = document.createElement('div');
+    d.setAttribute('data-foot-links', '');
+    d.style.marginTop = '8px';
+    d.innerHTML = '<a href="help.html">Help Center</a> &middot; <a href="safelock.html">SafeLock</a>';
+    f.appendChild(d);
+  });
 }
 
 // App-format bottom tab bar (Rapchat-style): Home / Explore / big red
@@ -311,8 +453,10 @@ function tabbar(active) {
     'index.html': 'index.html',
     'marketplace.html': 'marketplace.html',
     'studio.html': 'studio.html',
+    'upload.html': 'studio.html',
     'cards.html': 'cards.html',
     'beat.html': 'cards.html',
+    'claim.html': 'cards.html',
     'profile.html': 'profile.html',
     'creator.html': 'profile.html',
   }[active] || '';
@@ -343,15 +487,27 @@ function renderUser() {
   if (api.loggedIn()) {
     html += '<span>Signed in</span> <button class="btn ghost small" id="logout">Log out</button>';
   } else {
-    html += '<a class="btn ghost small" href="upload.html">Sign in</a>';
+    // Sign-in opens the modal (returns you to where you were) instead of
+    // dumping you on the upload page — the old vote confirm() did that.
+    html += '<button class="btn ghost small" id="signin-btn">Sign in</button>';
   }
+  // Persistent wallet chip: truncated address + bat avatar once claimed.
   const w = api.wallet;
-  html += w
-    ? ` <button class="btn ghost small" id="wallet-btn" title="${esc(w)} \u2014 tap to disconnect">${esc(w.slice(0, 6))}\u2026${esc(w.slice(-4))}</button>`
-    : ' <button class="btn small" id="wallet-btn">Connect wallet</button>';
+  if (w) {
+    const bat = api.bat ? batById(api.bat) : null;
+    const dot = bat ? `<span class="bat-dot" style="background:${bat.color};width:22px;height:22px;font-size:11px;margin:0 4px 0 0;vertical-align:-6px">${bat.name[0]}</span>` : '';
+    html += ` ${dot}<button class="btn ghost small" id="wallet-btn" title="${esc(w)} — tap to disconnect">${esc(w.slice(0, 6))}…${esc(w.slice(-4))}</button>`;
+  } else {
+    html += ' <button class="btn small" id="wallet-btn">Connect wallet</button>';
+  }
   box.innerHTML = html;
   const lo = document.getElementById('logout');
   if (lo) lo.onclick = () => { api.logout(); location.reload(); };
+  const si = document.getElementById('signin-btn');
+  if (si) si.onclick = () => {
+    if (window.Flow) Flow.signInModal('continue');
+    else location.href = 'upload.html';
+  };
   document.getElementById('wallet-btn').onclick = async () => {
     try {
       if (api.wallet) {

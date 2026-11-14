@@ -98,6 +98,29 @@
     return '';
   }
 
+  /* 30-second timeout for every live Meta call. Without it a slow or
+     hung request leaves the UI stuck on "Testing…" forever — that is
+     what happened on Star's phone: the button never came back. On abort
+     the caller gets a local-fallback result, not a hang, and a request
+     that never answered cannot have been charged. */
+  const LIVE_TIMEOUT_MS = 30000;
+  async function fetchLive(url, options) {
+    if (typeof AbortController === 'undefined' || typeof fetch === 'undefined') {
+      return fetch(url, options);
+    }
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), LIVE_TIMEOUT_MS);
+    try {
+      return await fetch(url, Object.assign({}, options, { signal: ctrl.signal }));
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  function timeoutError(e) {
+    return !!(e && e.name === 'AbortError');
+  }
+  const TIMEOUT_MSG = 'Timed out after 30s — no charge if it never answered';
+
   /* One short Spark call. This is the smoke test: a few hundred tokens,
      cents at Standard pricing ($1.25 in / $4.25 out per 1M), paid on the
      card on file because credits never landed. Returns
@@ -108,7 +131,7 @@
     if (!key) return { mode: 'local-fallback', error: 'No key in this browser. Save your key in this browser only first.' };
     if (typeof fetch === 'undefined') return { mode: 'local-fallback', error: 'fetch is unavailable in this environment.' };
     try {
-      const res = await fetch(API_BASE + '/responses', {
+      const res = await fetchLive(API_BASE + '/responses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
         body: JSON.stringify({ model: SPARK_MODEL, input: 'Reply in one short sentence: what is the capital of France?' })
@@ -123,6 +146,7 @@
       liveVerified = true;
       return { mode: 'live', text, model: SPARK_MODEL };
     } catch (e) {
+      if (timeoutError(e)) return { mode: 'local-fallback', error: TIMEOUT_MSG };
       return { mode: 'local-fallback', error: String(e && e.message ? e.message : e) };
     }
   }
@@ -134,7 +158,7 @@
     if (!key) return { mode: 'local-fallback', bat, line: localLine || '', live: false, error: 'No key in this browser.' };
     if (typeof fetch === 'undefined') return { mode: 'local-fallback', bat, line: localLine || '', live: false };
     try {
-      const res = await fetch(API_BASE + '/responses', {
+      const res = await fetchLive(API_BASE + '/responses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
         body: JSON.stringify({ model: SPARK_MODEL, input: String(prompt || localLine || '') })
@@ -145,6 +169,7 @@
       liveVerified = true;
       return { mode: 'live', bat, line: text.trim(), live: true };
     } catch (e) {
+      if (timeoutError(e)) return { mode: 'local-fallback', bat, line: localLine || '', live: false, error: TIMEOUT_MSG };
       return { mode: 'local-fallback', bat, line: localLine || '', live: false, error: String(e && e.message ? e.message : e) };
     }
   }
@@ -162,7 +187,7 @@
       const fd = new FormData();
       fd.append('file', blob, 'take.webm');
       fd.append('model', TRANSCRIBE_MODEL);
-      const res = await fetch(API_BASE + '/asr/transcribe', {
+      const res = await fetchLive(API_BASE + '/asr/transcribe', {
         method: 'POST',
         headers: { Authorization: 'Bearer ' + key },
         body: fd
@@ -177,6 +202,7 @@
       liveVerified = true;
       return { mode: 'live', text };
     } catch (e) {
+      if (timeoutError(e)) return { mode: 'local-fallback', error: TIMEOUT_MSG };
       return { mode: 'local-fallback', error: String(e && e.message ? e.message : e) };
     }
   }

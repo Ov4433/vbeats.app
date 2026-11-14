@@ -20,11 +20,77 @@
   @keyframes echo-sweep { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
   .echo-locked { border-color: #4caf50; }
   .echo-label { font-weight: 800; font-size: 18px; margin-top: 8px; }
+
+  /* Studio 3-path switcher (Nov 13): one job at a time — Record, Pattern,
+     Upload. Only the active path is visible; the others stay in the DOM
+     so every existing id / script keeps working. */
+  .studio-paths { display:flex; gap:8px; flex-wrap:wrap; margin:14px 0 4px; }
+  .studio-paths .path-tab { flex:1; min-width:120px; text-align:left; background:var(--panel);
+    border:1px solid var(--line); border-radius:10px; padding:12px; color:var(--txt); cursor:pointer; }
+  .studio-paths .path-tab b { display:block; font-size:15px; }
+  .studio-paths .path-tab span { color:var(--mut); font-size:12px; }
+  .studio-paths .path-tab.on { border-color:var(--pnk); box-shadow:0 0 0 1px var(--pnk); }
+  .studio-paths .path-tab.on b { color:var(--pnk); }
+  .studio-path[data-path] { display:none; }
+  .studio-path[data-path].on { display:block; }
+  .studio-path .card { margin-top:18px; }
 </style>
 </head>
 <body>
 <nav class="nav" id="nav"></nav>
 <main class="wrap" style="max-width:720px">
+  <!-- Studio paths (Nov 13): one job at a time. Default is Record —
+       mic → take → publish. Pattern is the sequencer + crew, Upload is
+       the file wizard. Echobeatification + Forte stay visible on Pattern;
+       only the paid Meta API test moved into the Lab block. -->
+  <div class="studio-paths" role="tablist" aria-label="Studio paths">
+    <button class="path-tab on" data-studio-tab="record" role="tab" aria-selected="true"><b>🎙️ 1 · Record</b><span>Mic → take → publish</span></button>
+    <button class="path-tab" data-studio-tab="pattern" role="tab" aria-selected="false"><b>⏺ 2 · Pattern</b><span>Grid → render → publish</span></button>
+    <button class="path-tab" data-studio-tab="upload" role="tab" aria-selected="false"><b>⬆ 3 · Upload file</b><span>File → fingerprint → publish</span></button>
+  </div>
+  <p class="note" id="studio-path-note">Pick a path, do the one job, publish, list licenses. Nothing else is on screen until you switch.</p>
+
+  <section class="studio-path on" data-studio-path="record" aria-label="Record path">
+  <div class="page-head"><div><h1>Recording Studio</h1><p>Record from your mic, then publish straight to the marketplace.</p></div></div>
+
+  <div class="card studio-booth">
+    <div class="booth-side">
+      <img src="assets/mascot-profile.webp" alt="Studio mascot">
+      <div><span class="rec-lamp" id="lamp"></span><span id="status" style="color:var(--mut)">Ready</span></div>
+    </div>
+    <div class="timer" id="timer">0:00</div>
+    <div class="meter"><div id="meterfill"></div></div>
+    <button class="rec-btn" id="rec">●</button>
+    <p class="note" id="hint">Tap to start recording. There is a short count-in first, then the mic opens — your browser will ask for permission if it has not already.</p>
+    <div id="rec-err"></div>
+  </div>
+
+  <div class="mascot-says">
+    <img src="assets/mascot-profile.webp" alt="">
+    <div class="bubble">🦇 I'm in the booth with you. <b>Hit record</b> — I'll keep the levels honest.</div>
+  </div>
+
+  <h2 style="margin:26px 0 8px">Takes</h2>
+  <div id="takes"><p class="note">No takes yet.</p></div>
+
+  <div class="card" id="pub-card" style="display:none;margin-top:18px">
+    <h2 style="margin-bottom:6px">Publish take</h2>
+    <div id="pub-err"></div>
+    <div class="field"><label>Title</label><input id="p-title" placeholder="Late Night Idea"></div>
+    <div class="row2">
+      <div class="field"><label>Genre</label>
+        <select id="p-genre"><option>Trap</option><option>Hip-Hop</option><option>R&amp;B</option><option>Pop</option><option>Drill</option><option>Afrobeats</option><option>EDM</option><option>Other</option></select>
+      </div>
+      <div class="field"><label>Price (USD)</label><input id="p-price" type="number" min="0" step="0.01" value="9.99"></div>
+    </div>
+    <div class="field"><label>BPM (optional)</label><input id="p-bpm" type="number" min="1" max="999"></div>
+    <button class="btn" id="pub-go" style="width:100%">Publish to marketplace</button>
+    <p class="note">You need to be signed in — <a href="upload.html" style="color:var(--pur)">sign in here</a>.</p>
+    <div id="pub-done"></div>
+  </div>
+  </section>
+
+  <section class="studio-path" data-studio-path="pattern" aria-label="Pattern path">
   <h2 style="margin:26px 0 8px">Beat Maker</h2>
   <div class="card">
     <div class="seq-transport">
@@ -60,7 +126,9 @@
   <div class="card cop-card">
     <div class="cop-head">
       <div><h2 style="margin-bottom:4px">V Team in the session</h2>
-      <p class="note" style="margin-top:0">Your co-producers. Quiet until you call them — then they put real notes on your grid.</p></div>
+      <p class="note" style="margin-top:0">Your co-producers. Quiet until you call them — then they put real notes on your grid.</p>
+      <p class="note" id="crew-mode" style="margin-top:0">Crew: Scripted — save your Meta API key below and pass the live test to go live. Scripted lines still work.</p>
+      <p class="note" style="margin-top:0">Live calls are paid (the $150 credits never landed) — a few cents per short call. Nothing calls live until you tap.</p></div>
       <button class="btn small" id="cop-toggle">Open the session</button>
     </div>
     <div id="cop-body" style="display:none">
@@ -82,8 +150,9 @@
       <div class="cop-describe">
         <input id="cop-desc" type="text" placeholder='Describe a beat — "dark boom bap, 92, sparse"' aria-label="Describe a beat">
         <button class="btn small ghost cop-btn bat-volt" id="cop-desc-go">🦇 Volt — Build it</button>
+        <button class="btn small ghost cop-btn" id="cop-desc-voice" title="Say the direction out loud — Transcribe hears it, then the same describe-a-beat path builds it. Needs your Meta API key saved below.">🎙 Say it</button>
       </div>
-      <p class="note" style="margin-top:0">Volt reads plain words: a style (boom bap, trap, house, drill), a tempo number, sparse or busy, dark or bright. Anything else, he'll admit he doesn't know it.</p>
+      <p class="note" style="margin-top:0">Volt reads plain words: a style (boom bap, trap, house, drill), a tempo number, sparse or busy, dark or bright. Anything else, he'll admit he doesn't know it. "Say it" records up to 5 seconds and lets Transcribe turn your voice into those same words.</p>
       <div id="cop-log"><p class="note">Quiet in here. The crew only speaks when you call them.</p></div>
       <div id="live-spat" style="display:none; margin-top:12px"></div>
     </div>
@@ -103,6 +172,7 @@
       <span class="note" id="live-hum-note"></span>
       <button class="btn small ghost" id="live-scripted">Run scripted demo (safety net)</button>
     </div>
+    <p class="note">Mic tip: if it hears nothing, the browser may have paused the mic — tap the button again, or check the lock icon in the address bar and allow the microphone. There is a short count-in before it starts listening.</p>
     <div class="field">
       <label>Notepad — write the words you're humming</label>
       <textarea class="demo-field" id="echo-notepad" rows="2" placeholder="Write the words you're humming…" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);color:inherit"></textarea>
@@ -132,12 +202,15 @@
     <div class="demo-row" style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0"><button class="btn small" id="live-forte-go">Forte, carry this into the session</button></div>
   </div>
 
+  <details class="card" style="margin-top:18px" id="studio-lab">
+    <summary style="cursor:pointer;font-weight:800">🧪 Lab — experimental, paid</summary>
+    <p class="note">Meta API live tests live here now — Spark + Transcribe, key-gated, paid per call (the $150 credits never landed). Nothing here is needed to make a beat.</p>
   <!-- Meta API — live test (Nov 8, Star: "Let's do that").
        Paid usage: $150 credits never landed, so a test call charges the
        card on file (Visa ending 3018, $20 threshold). A short Spark test
        is cents. Key is stored ONLY in this browser's localStorage, never
        sent to Muse, never in a file, never in chat. -->
-  <div class="card" style="margin-top:18px">
+  <div style="margin-top:12px">
     <h2 style="margin-top:0">Meta API — live test</h2>
     <p class="note" id="meta-live-status">Voice + Spark: local fallback active.</p>
     <div class="field"><label>Meta Model API key — saved in this browser only</label>
@@ -151,46 +224,22 @@
     <p class="note">Test call: Spark 1.3, one short question, a few hundred tokens, cents at Standard pricing. Do NOT paste your key in chat, to me, or anywhere else. Realtime Voice Transcribe is not wired yet — file transcription is the first live step, in code only so far.</p>
   </div>
 
-  <div class="page-head"><div><h1>Recording Studio</h1><p>Record from your mic, then publish straight to the marketplace.</p></div></div>
+  </details>
+  </section>
 
-  <div class="card studio-booth">
-    <div class="booth-side">
-      <img src="assets/mascot-profile.webp" alt="Studio mascot">
-      <div><span class="rec-lamp" id="lamp"></span><span id="status" style="color:var(--mut)">Ready</span></div>
-    </div>
-    <div class="timer" id="timer">0:00</div>
-    <div class="meter"><div id="meterfill"></div></div>
-    <button class="rec-btn" id="rec">●</button>
-    <p class="note" id="hint">Tap to start recording. Your browser will ask for mic permission.</p>
-    <div id="rec-err"></div>
+  <section class="studio-path" data-studio-path="upload" aria-label="Upload path">
+  <div class="card">
+    <h2 style="margin-top:0">Upload a file</h2>
+    <p class="note">Already have audio? The 3-step upload wizard signs you in, fingerprints the file, and publishes it to the feed and marketplace.</p>
+    <p class="note">Step 1 · Sign in &nbsp;→&nbsp; Step 2 · Drop your audio &nbsp;→&nbsp; Step 3 · Title, genre, price, publish.</p>
+    <p style="margin-top:14px"><a class="btn" href="upload.html">Open the upload wizard →</a></p>
+    <p class="note">Your beat is fingerprinted on upload, and registered on-chain when your wallet is connected.</p>
   </div>
-
-  <div class="mascot-says">
-    <img src="assets/mascot-profile.webp" alt="">
-    <div class="bubble">🦇 I'm in the booth with you. <b>Hit record</b> — I'll keep the levels honest.</div>
-  </div>
-
-  <h2 style="margin:26px 0 8px">Takes</h2>
-  <div id="takes"><p class="note">No takes yet.</p></div>
-
-  <div class="card" id="pub-card" style="display:none;margin-top:18px">
-    <h2 style="margin-bottom:6px">Publish take</h2>
-    <div id="pub-err"></div>
-    <div class="field"><label>Title</label><input id="p-title" placeholder="Late Night Idea"></div>
-    <div class="row2">
-      <div class="field"><label>Genre</label>
-        <select id="p-genre"><option>Trap</option><option>Hip-Hop</option><option>R&amp;B</option><option>Pop</option><option>Drill</option><option>Afrobeats</option><option>EDM</option><option>Other</option></select>
-      </div>
-      <div class="field"><label>Price (USD)</label><input id="p-price" type="number" min="0" step="0.01" value="9.99"></div>
-    </div>
-    <div class="field"><label>BPM (optional)</label><input id="p-bpm" type="number" min="1" max="999"></div>
-    <button class="btn" id="pub-go" style="width:100%">Publish to marketplace</button>
-    <p class="note">You need to be signed in — <a href="upload.html" style="color:var(--pur)">sign in here</a>.</p>
-    <div id="pub-done"></div>
-  </div>
+  </section>
 </main>
 <footer class="footer"><div class="footer-bat"><img src="assets/mascot-profile.webp" alt=""></div>Verified Beats Studio — Volt keeps the receipts.</footer>
 <script src="js/api.js"></script>
+<script src="js/flow.js"></script>
 <script src="js/volt.js"></script>
 <script src="js/pattern-logic.js"></script>
 <script src="js/daily-lines.js"></script>
@@ -202,6 +251,7 @@
 <script src="js/demo-safety.js"></script>
 <script src="js/demo-voice.js"></script>
 <script src="js/live-adapter.js"></script>
+<script src="js/studio-paths.js"></script>
 <script>
 /* Meta API live-test wiring — key stays in this browser only. */
 (function () {
@@ -221,11 +271,13 @@
       ? 'Key saved in this browser only. Now tap "Test live Spark" — one short paid call.'
       : 'Key not saved — it was empty, or this browser blocks storage.';
     renderStatus();
+    document.dispatchEvent(new Event('vbeats-voice-state'));
   };
   const clearBtn = $('meta-key-clear');
   if (clearBtn) clearBtn.onclick = () => {
     DemoVoice.clearLocalKey();
     if (statusEl) statusEl.textContent = 'Key cleared from this browser.';
+    document.dispatchEvent(new Event('vbeats-voice-state'));
   };
   const testBtn = $('meta-test-go');
   if (testBtn) testBtn.onclick = async () => {
@@ -236,8 +288,12 @@
         ? 'LIVE — Spark answered: "' + r.text + '" Paid test call, credits never landed.'
         : 'Live test failed, fallback stays on: ' + (r.error || 'unknown error');
     } finally {
+      // Re-enable the button only. Do NOT call renderStatus() here: it
+      // overwrites statusEl with gateNotice() and wipes the test result
+      // (live answer or failure) the user just waited for. gateNotice
+      // renders on load / save / clear only.
       testBtn.disabled = false; testBtn.textContent = 'Test live Spark — one short call';
-      renderStatus();
+      document.dispatchEvent(new Event('vbeats-voice-state'));
     }
   };
 })();
@@ -277,9 +333,26 @@ function drawMeter() {
 
 $('rec').onclick = async () => {
   if (mediaRec && mediaRec.state === 'recording') { stopRec(); return; }
+  // Count-in (Nov 13): three short beats so the mic opens on the downbeat,
+  // not mid-breath. The mic is requested AFTER the count-in, so a denied
+  // permission never leaves a stale "Recording" state behind.
+  $('rec').disabled = true;
+  for (let n = 3; n >= 1; n--) {
+    $('status').textContent = 'Count-in… ' + n;
+    $('timer').textContent = '0:0' + (4 - n);
+    await new Promise(r => setTimeout(r, 300));
+  }
+  $('timer').textContent = '0:00';
+  $('rec').disabled = false;
   try {
     stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    // Same phone bug as the hum button: an AudioContext created outside a
+    // user gesture starts suspended, so the level meter reads flat. Resume
+    // it explicitly (twice if needed) and say so if it stays suspended —
+    // the MediaRecorder itself still records from the stream either way.
+    await audioCtx.resume().catch(() => {});
+    if (audioCtx.state === 'suspended') await audioCtx.resume().catch(() => {});
     const src = audioCtx.createMediaStreamSource(stream);
     analyser = audioCtx.createAnalyser(); analyser.fftSize = 2048;
     src.connect(analyser);
@@ -289,9 +362,12 @@ $('rec').onclick = async () => {
     mediaRec.onstop = onTake;
     mediaRec.start();
     startTs = Date.now();
-    $('lamp').classList.add('live'); $('status').textContent = 'Recording';
+    $('lamp').classList.add('live');
+    $('status').textContent = audioCtx.state === 'running' ? 'Recording' : 'Recording — level meter paused';
     $('rec').textContent = '■'; $('rec').classList.add('stop');
-    $('hint').textContent = 'Tap again to stop.';
+    $('hint').textContent = audioCtx.state === 'running'
+      ? 'Tap again to stop.'
+      : 'Your take is still recording — the browser paused the meter only. Tap again to stop, or retry if the meter stays flat.';
     tick = setInterval(() => $('timer').textContent = fmt(Date.now() - startTs), 250);
     drawMeter();
   } catch (e) { showErr('rec-err', 'Mic blocked: ' + e.message); Volt.help("Mic's blocked. Click the lock icon in the address bar, allow the microphone, then hit record again."); }
@@ -300,8 +376,10 @@ $('rec').onclick = async () => {
 function stopRec() {
   clearInterval(tick); cancelAnimationFrame(meterRaf);
   $('meterfill').style.width = '0%';
-  mediaRec.stop();
-  stream.getTracks().forEach(t => t.stop());
+  if (mediaRec) mediaRec.stop();
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  if (audioCtx) { audioCtx.close().catch(() => {}); audioCtx = null; }
+  analyser = null;
   $('lamp').classList.remove('live'); $('status').textContent = 'Ready';
   $('rec').textContent = '●'; $('rec').classList.remove('stop');
   $('timer').textContent = '0:00'; $('hint').textContent = 'Tap to record another take.';
@@ -348,6 +426,17 @@ $('pub-go').onclick = async () => {
     const beat = await api.upload(fd);
     $('pub-done').innerHTML = `<div class="badge ok" style="margin-top:14px">✓ Published &amp; fingerprinted</div>
       <p class="note"><a href="beat.html?id=${esc(beat.id)}" style="color:var(--pur)">View your beat →</a></p>`;
+    const pubNext = document.createElement('div');
+    $('pub-done').after(pubNext);
+    Flow.nextSteps(pubNext, {
+      title: 'Your beat is live — what next?',
+      text: 'It is in the feed and the marketplace now.',
+      actions: [
+        { label: 'View your beat', href: 'beat.html?id=' + encodeURIComponent(beat.id) },
+        { label: 'View & list licenses', href: 'beat.html?id=' + encodeURIComponent(beat.id) + '#buy' },
+        { label: 'See it in the feed', href: 'index.html', ghost: true },
+      ],
+    });
   } catch (e) { showErr('pub-err', e.message); Volt.help("That publish didn't go through. Check you're signed in and the take actually recorded, then try again."); }
   finally { $('pub-go').disabled = false; $('pub-go').textContent = 'Publish to marketplace'; }
 };
@@ -425,6 +514,17 @@ $('seq-pub-go').onclick = async () => {
     try { localStorage.setItem('vbeats_pattern:' + title, JSON.stringify(p)); } catch { /* storage unavailable */ }
     $('seq-pub-done').innerHTML = `<div class="badge ok" style="margin-top:14px">✓ Published &amp; fingerprinted</div>
       <p class="note"><a href="beat.html?id=${esc(beat.id)}" style="color:var(--pur)">View your beat →</a></p>`;
+    const seqNext = document.createElement('div');
+    $('seq-pub-done').after(seqNext);
+    Flow.nextSteps(seqNext, {
+      title: 'Your pattern is live — what next?',
+      text: 'It is in the feed and the marketplace now.',
+      actions: [
+        { label: 'View your beat', href: 'beat.html?id=' + encodeURIComponent(beat.id) },
+        { label: 'View & list licenses', href: 'beat.html?id=' + encodeURIComponent(beat.id) + '#buy' },
+        { label: 'See it in the feed', href: 'index.html', ghost: true },
+      ],
+    });
   } catch (e) { showErr('seq-pub-err', e.message); Volt.help("That pattern publish didn't go through. Check you're signed in and the pattern has notes in it, then try again."); }
   finally { $('seq-pub-go').disabled = false; $('seq-pub-go').textContent = 'Publish this pattern'; }
 };

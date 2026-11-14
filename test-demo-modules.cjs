@@ -113,4 +113,15 @@ ok('voice stub is gated and local fallback parses direction', () => {
   assert.strictEqual(V.think('Volt', 'hi').line, 'hi');
 });
 
+/* Hum capture without a browser: no navigator means onError + onState('error'),
+   never a hang — and the suspended-mic error code exists for the retry path. */
+ok('hum captureBar degrades without a mic and exposes the suspended code', () => {
+  assert.strictEqual(typeof H.captureBar, 'function');
+  let errSeen = null, stateSeen = null;
+  H.captureBar(95, () => {}, () => {}, (e) => { errSeen = e; }, { onState: (s) => { stateSeen = s; }, countInMs: 0 });
+  assert.ok(errSeen instanceof Error, 'onError must fire with no navigator');
+  assert.match(errSeen.message, /unavailable/i);
+  assert.strictEqual(stateSeen, 'error');
+});
+
 console.log('\n' + n + ' demo module checks passed.');

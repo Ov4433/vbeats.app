@@ -23,14 +23,17 @@ import {
   checkFingerprintOnChain,
   registerBeatOnChain,
 } from '../services/chainService';
+import { getNftListing } from '../services/nftService';
 import { publicBaseUrl } from '../utils/baseUrl';
-import { salesRanking, rankForBeat, playCounts } from '../services/rankService';
+import { salesRanking, rankForBeat, playCounts, playCountsInWindow } from '../services/rankService';
 import { beatOffers } from '../services/offerService';
 import {
   computeVoteWeight,
   voteTotals,
+  voteTotalsInWindow,
   votedBeatIds,
   topVoted,
+  weekWindowUtc,
 } from '../services/voteService';
 
 type Ranking = Awaited<ReturnType<typeof salesRanking>>;
@@ -56,6 +59,34 @@ function withCardStats<T extends { id: string }>(
   };
 }
 
+/** "Co-signed by …" (money path, Nov 13): for songs that went live
+    through an accepted feature request, attach the accepting producer's
+    username. One query per call, only for live songs with a co-sign
+    time. Never invents a co-signer — a song with no accepted request
+    gets coSignedBy: null. */
+async function withCoSignedBy<T extends {
+  id: string; kind?: string; coSignStatus?: string; coSignedAt?: string | null;
+}>(
+  beats: T[]
+): Promise<(T & { coSignedBy: { id: string; username: string } | null })[]> {
+  const ids = beats
+    .filter((b) => b.kind === 'song' && b.coSignStatus === 'live' && b.coSignedAt)
+    .map((b) => b.id);
+  if (!ids.length) return beats.map((b) => ({ ...b, coSignedBy: null }));
+  const accepted = await prisma.featureRequest.findMany({
+    where: { songId: { in: ids }, status: 'accepted' },
+    include: { producer: { select: { id: true, username: true } } },
+    orderBy: { respondedAt: 'desc' },
+  });
+  const bySong = new Map<string, { id: string; username: string }>();
+  for (const r of accepted) {
+    if (!bySong.has(r.songId) && r.producer) {
+      bySong.set(r.songId, { id: r.producer.id, username: r.producer.username });
+    }
+  }
+  return beats.map((b) => ({ ...b, coSignedBy: bySong.get(b.id) ?? null }));
+}
+
 async function cardInputs(): Promise<[Ranking, Plays]> {
   return Promise.all([salesRanking(), playCounts()]);
 }
@@ -72,6 +103,43 @@ function withVotes<T extends { id: string }>(
     ...beat,
     votes: totals.get(beat.id) ?? { totalWeight: 0, count: 0 },
     votedByMe: voted.has(beat.id),
+  };
+}
+
+/**
+ * Weekly window data for `?window=7d`: per-beat plays + vote weight inside
+ * the current Mon–Sun UTC week. Returns null unless the caller asked for
+ * the window — lifetime totals stay the default, and nothing is ever
+ * labelled "this week" unless it was actually measured in the week.
+ */
+async function weekInputs(beatIds: string[]): Promise<{
+  week: { start: string; end: string };
+  plays: Map<string, number>;
+  votes: Map<string, { totalWeight: number; count: number }>;
+} | null> {
+  const { start, end } = weekWindowUtc();
+  const [plays, votes] = await Promise.all([
+    playCountsInWindow(start, end),
+    voteTotalsInWindow(beatIds, start, end),
+  ]);
+  return {
+    week: { start: start.toISOString(), end: end.toISOString() },
+    plays,
+    votes,
+  };
+}
+
+/** Attach the per-beat `week` field ({ plays, votes }) when window data exists. */
+function withWeek<T extends { id: string }>(
+  beat: T,
+  w: Awaited<ReturnType<typeof weekInputs>>
+): T & { week: { plays: number; votes: number } } {
+  return {
+    ...beat,
+    week: {
+      plays: w ? w.plays.get(beat.id) ?? 0 : 0,
+      votes: w ? w.votes.get(beat.id)?.totalWeight ?? 0 : 0,
+    },
   };
 }
 
@@ -150,12 +218,52 @@ function localPathForAudioUrl(audioUrl: string | null): string | null {
 
 // ---------------------------------------------------------------------------
 // GET /v1/beats — paginated list (newest first)
+// Query: window=7d — attach per-beat `week: { plays, votes }` measured in
+// the current Mon–Sun UTC week, plus top-level `week: { start, end }`.
+// Without it, only lifetime totals are returned.
 // ---------------------------------------------------------------------------
+
+/** Make-a-song visibility + co-sign (Nov 13).
+ * A pending song is visible ONLY to its singer and to the parent beat's
+ * producer — never in a public list. Everything else is 'live'.
+ * There is NO on-chain co-sign: this is a plain DB/API pending flag,
+ * honestly labelled in the UI as "Awaiting producer co-sign". */
+const PARENT_SELECT = { select: { id: true, title: true, userId: true } } as const;
+function visibilityWhere(userId?: string) {
+  // Beats are 'live' by default; a pending song shows only to its singer.
+  return { OR: [{ coSignStatus: 'live' }, { userId: userId ?? '__nobody__' }] };
+}
+async function resolveSongFields(input: { kind: string; parentBeatId: string | null }, userId: string) {
+  if (input.kind !== 'song') return { kind: 'beat', parentBeatId: null, coSignStatus: 'live', coSignedAt: null };
+  if (!input.parentBeatId) throw new HttpError(400, 'A song needs a parent beat to rap on');
+  const parent = await prisma.beat.findUnique({ where: { id: input.parentBeatId } });
+  if (!parent) throw new HttpError(400, 'Parent beat not found');
+  if ((parent as any).kind === 'song') throw new HttpError(400, 'Rap on a beat, not on another song');
+  const own = parent.userId === userId;
+  return {
+    kind: 'song',
+    parentBeatId: parent.id,
+    coSignStatus: own ? 'live' : 'pending',
+    coSignedAt: own ? new Date() : null,
+  };
+}
+
 export const listBeats = asyncHandler(async (req: Request, res: Response) => {
   const { page, limit, skip } = pagination(req);
+  const wantWeek = req.query.window === '7d';
+  const kind = String(req.query.kind ?? '').toLowerCase();
+  const visible = visibilityWhere(req.user?.id);
+  const where = {
+    AND: [
+      visible,
+      ...(kind === 'beat' || kind === 'song' ? [{ kind }] : []),
+    ],
+  };
   const [total, beats] = await Promise.all([
-    prisma.beat.count(),
+    prisma.beat.count({ where: where as never }),
     prisma.beat.findMany({
+      where: where as never,
+      include: { parentBeat: PARENT_SELECT },
       orderBy: [{ isHouse: 'desc' }, { createdAt: 'desc' }],
       skip,
       take: limit,
@@ -165,11 +273,17 @@ export const listBeats = asyncHandler(async (req: Request, res: Response) => {
     req.user?.id,
     beats.map((b) => b.id)
   );
+  const week = wantWeek
+    ? await weekInputs(beats.map((b) => b.id))
+    : null;
   res.json({
-    beats: beats.map((b) => withVotes(serializeBeat(b), totals, voted)),
+    beats: await withCoSignedBy(beats.map((b) =>
+      week ? withWeek(withVotes(serializeBeat(b), totals, voted), week) : withVotes(serializeBeat(b), totals, voted)
+    )),
     total,
     page,
     limit,
+    ...(week ? { week: week.week } : {}),
   });
 });
 
@@ -186,6 +300,7 @@ export const createBeat = asyncHandler(async (req: Request, res: Response) => {
   if (!Number.isFinite(input.price) || input.price < 0) {
     throw new HttpError(400, 'price must be a non-negative number');
   }
+  const song = await resolveSongFields(input, req.user!.id);
   const beat = await prisma.beat.create({
     data: {
       title: input.title,
@@ -199,7 +314,8 @@ export const createBeat = asyncHandler(async (req: Request, res: Response) => {
       imageUrl: input.imageUrl,
       fingerprint: input.fingerprint,
       userId: req.user!.id,
-    },
+      ...song,
+    } as any,
   });
   res.status(201).json(serializeBeat(beat));
 });
@@ -249,6 +365,7 @@ export const uploadBeat = [
       audioUrl = `/uploads/${path.basename(req.file.path)}`;
     }
 
+    const song = await resolveSongFields(input, req.user!.id);
     const beat = await prisma.beat.create({
       data: {
         title: input.title,
@@ -262,7 +379,8 @@ export const uploadBeat = [
         imageUrl: input.imageUrl,
         fingerprint,
         userId: req.user!.id,
-      },
+        ...song,
+      } as any,
     });
     // Register-on-upload: fire-and-forget on-chain registration. Never fails
     // the upload — the verify endpoint remains the source of truth.
@@ -290,7 +408,7 @@ export const getUserBeats = asyncHandler(async (req: Request, res: Response) => 
     beats.map((b) => b.id)
   );
   res.json({
-    beats: beats.map((b) => withVotes(serializeBeat(b), totals, voted)),
+    beats: await withCoSignedBy(beats.map((b) => withVotes(serializeBeat(b), totals, voted))),
   });
 });
 
@@ -300,9 +418,12 @@ export const getUserBeats = asyncHandler(async (req: Request, res: Response) => 
 // ---------------------------------------------------------------------------
 export const marketplace = asyncHandler(async (req: Request, res: Response) => {
   const { page, limit, skip } = pagination(req);
-  const { search, genre, minPrice, maxPrice } = req.query as Record<string, string | undefined>;
+  const { search, genre, minPrice, maxPrice, kind } = req.query as Record<string, string | undefined>;
 
   const where: Record<string, unknown> = {};
+  if (genre) where.genre = { equals: genre, mode: 'insensitive' };
+  // Feed filter (Nov 13): ?kind=beat|song. Anything else means all.
+  if (kind === 'beat' || kind === 'song') where.kind = kind;
   if (genre) where.genre = { equals: genre, mode: 'insensitive' };
   const price: Record<string, number> = {};
   if (minPrice !== undefined && minPrice !== '') price.gte = Number(minPrice);
@@ -315,10 +436,13 @@ export const marketplace = asyncHandler(async (req: Request, res: Response) => {
     ];
   }
 
+  const visibleWhere = visibilityWhere(req.user?.id);
+  const combinedWhere = { AND: [visibleWhere, where] };
   const [total, beats] = await Promise.all([
-    prisma.beat.count({ where: where as never }),
+    prisma.beat.count({ where: combinedWhere as never }),
     prisma.beat.findMany({
-      where: where as never,
+      where: combinedWhere as never,
+      include: { parentBeat: PARENT_SELECT },
       orderBy: [{ isHouse: 'desc' }, { createdAt: 'desc' }],
       skip,
       take: limit,
@@ -329,31 +453,44 @@ export const marketplace = asyncHandler(async (req: Request, res: Response) => {
     req.user?.id,
     beats.map((b) => b.id)
   );
+  const week = req.query.window === '7d'
+    ? await weekInputs(beats.map((b) => b.id))
+    : null;
   res.json({
-    beats: beats.map((b) =>
-      withVotes(withCardStats(serializeBeat(b), ranking, plays), totals, voted)
-    ),
+    beats: await withCoSignedBy(beats.map((b) => {
+      const withStats = withVotes(withCardStats(serializeBeat(b), ranking, plays), totals, voted);
+      return week ? withWeek(withStats, week) : withStats;
+    })),
     total,
     page,
     limit,
+    ...(week ? { week: week.week } : {}),
   });
 });
 
 /** Compatibility with the mobile app's GET /beats/search?q= call. */
 export const search = asyncHandler(async (req: Request, res: Response) => {
   const q = String(req.query.q ?? '').trim();
+  const kind = String(req.query.kind ?? '').toLowerCase();
   if (!q) {
     res.json({ beats: [] });
     return;
   }
   const beats = await prisma.beat.findMany({
     where: {
-      OR: [
-        { title: { contains: q, mode: 'insensitive' } },
-        { description: { contains: q, mode: 'insensitive' } },
-        { genre: { contains: q, mode: 'insensitive' } },
+      AND: [
+        visibilityWhere(req.user?.id),
+        ...(kind === 'beat' || kind === 'song' ? [{ kind }] : []),
+        {
+          OR: [
+            { title: { contains: q, mode: 'insensitive' } },
+            { description: { contains: q, mode: 'insensitive' } },
+            { genre: { contains: q, mode: 'insensitive' } },
+          ],
+        },
       ],
-    },
+    } as never,
+    include: { parentBeat: PARENT_SELECT },
     orderBy: { createdAt: 'desc' },
     take: 50,
   });
@@ -362,7 +499,7 @@ export const search = asyncHandler(async (req: Request, res: Response) => {
     beats.map((b) => b.id)
   );
   res.json({
-    beats: beats.map((b) => withVotes(serializeBeat(b), totals, voted)),
+    beats: await withCoSignedBy(beats.map((b) => withVotes(serializeBeat(b), totals, voted))),
   });
 });
 
@@ -370,16 +507,72 @@ export const search = asyncHandler(async (req: Request, res: Response) => {
 // GET /v1/beats/:id
 // ---------------------------------------------------------------------------
 export const getBeat = asyncHandler(async (req: Request, res: Response) => {
-  const beat = await prisma.beat.findUnique({ where: { id: req.params.id } });
+  const beat = await prisma.beat.findUnique({
+    where: { id: req.params.id },
+    include: { parentBeat: PARENT_SELECT },
+  });
   if (!beat) throw new HttpError(404, 'Beat not found');
+  if ((beat as any).coSignStatus === 'pending') {
+    const me = req.user?.id;
+    const parentOwner = (beat as any).parentBeat?.userId;
+    if (me !== beat.userId && me !== parentOwner) throw new HttpError(404, 'Beat not found');
+  }
   const [ranking, plays] = await cardInputs();
   const [totals, voted] = await voteInputs(req.user?.id, [beat.id]);
   res.json(
-    withVotes(withCardStats(serializeBeat(beat), ranking, plays), totals, voted)
+    (await withCoSignedBy([withVotes(withCardStats(serializeBeat(beat), ranking, plays), totals, voted)]))[0]
   );
 });
 
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// GET /v1/beats/pending-co-sign — songs awaiting MY approval as the parent
+// beat's producer. POST /v1/beats/:id/co-sign — approve / reject one.
+// Only the parent beat's producer can decide; the singer cannot approve
+// their own song over someone else's beat. No on-chain step exists.
+// ---------------------------------------------------------------------------
+export const listPendingCoSign = asyncHandler(async (req: Request, res: Response) => {
+  const myBeats = await prisma.beat.findMany({
+    where: { userId: req.user!.id },
+    select: { id: true },
+  });
+  const parentIds = myBeats.map((b) => b.id);
+  const songs = await prisma.beat.findMany({
+    where: { kind: 'song', coSignStatus: 'pending', parentBeatId: { in: parentIds } },
+    include: { parentBeat: PARENT_SELECT },
+    orderBy: { createdAt: 'desc' },
+  });
+  const [totals, voted] = await voteInputs(req.user!.id, songs.map((b) => b.id));
+  res.json({ beats: songs.map((b) => withVotes(serializeBeat(b), totals, voted)) });
+});
+
+export const coSignBeat = asyncHandler(async (req: Request, res: Response) => {
+  const beat = await prisma.beat.findUnique({
+    where: { id: req.params.id },
+    include: { parentBeat: PARENT_SELECT },
+  });
+  if (!beat) throw new HttpError(404, 'Beat not found');
+  if ((beat as any).kind !== 'song') throw new HttpError(400, 'Only songs need a co-sign');
+  if ((beat as any).coSignStatus !== 'pending') throw new HttpError(400, 'This song is not awaiting co-sign');
+  if ((beat as any).parentBeat?.userId !== req.user!.id) {
+    throw new HttpError(403, 'Only the parent beat producer can co-sign this song');
+  }
+  const action = String(req.body?.action ?? '').toLowerCase();
+  if (action !== 'approve' && action !== 'reject') {
+    throw new HttpError(400, 'action must be approve or reject');
+  }
+  const updated = await prisma.beat.update({
+    where: { id: beat.id },
+    data: {
+      coSignStatus: action === 'approve' ? 'live' : 'rejected',
+      coSignedAt: new Date(),
+    } as any,
+    include: { parentBeat: PARENT_SELECT },
+  });
+  res.json(serializeBeat(updated));
+});
+
 // POST /v1/beats/:id/vote — toggle the current user's vote on a beat.
 // Weight is snapshotted at vote time from the voter's wallet (see
 // voteService.computeVoteWeight): pass holder 3, VBEATS holder 2, else 1.
@@ -394,6 +587,18 @@ export const toggleVote = asyncHandler(async (req: Request, res: Response) => {
   const existing = await prisma.vote.findUnique({
     where: { beatId_userId: { beatId: beat.id, userId: user.id } },
   });
+
+  // Vote gate (Nov 13): a song that is still awaiting producer co-sign
+  // — or was declined — cannot be voted on, so it can never surface in
+  // Top Voted. Retracting an existing vote is always allowed.
+  if (!existing && (beat as any).kind === 'song' && (beat as any).coSignStatus !== 'live') {
+    throw new HttpError(
+      400,
+      (beat as any).coSignStatus === 'pending'
+        ? 'This song is still awaiting producer co-sign — it can be voted on once the producer approves it'
+        : 'This song was not co-signed by the producer, so it cannot be voted on'
+    );
+  }
 
   if (existing) {
     await prisma.vote.delete({ where: { id: existing.id } });
@@ -672,10 +877,48 @@ export const verifyBeat = asyncHandler(async (req: Request, res: Response) => {
 });
 
 // ---------------------------------------------------------------------------
+// POST /v1/beats/verify-batch — on-chain registration status for up to 12
+// beats at once (read-only). The feed uses it lazily: cards verify as they
+// scroll into view instead of blocking the feed on 12 chain calls, and
+// results are cached per beat id on the client. Never throws per beat —
+// a failed check reports onChain=false with configured=true.
+// ---------------------------------------------------------------------------
+export const verifyBatch = asyncHandler(async (req: Request, res: Response) => {
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
+  if (ids.length === 0 || ids.length > 12) {
+    throw new HttpError(400, 'ids must be an array of 1–12 beat ids');
+  }
+  const beats = await prisma.beat.findMany({
+    where: { id: { in: ids.map(String) } },
+    select: { id: true, fingerprint: true },
+  });
+  const results: Record<
+    string,
+    { onChain: boolean; configured: boolean; owner?: string; registeredAt?: string }
+  > = {};
+  await Promise.all(
+    beats.map(async (b) => {
+      const chain = await checkFingerprintOnChain(b.fingerprint);
+      results[b.id] = {
+        onChain: chain.onChain,
+        configured: chain.configured,
+        ...(chain.owner ? { owner: chain.owner } : {}),
+        ...(chain.registeredAt ? { registeredAt: chain.registeredAt } : {}),
+      };
+    })
+  );
+  const chainConfigured = Boolean(config.rpcUrl && config.beatRegistryAddress);
+  res.json({ results, chainConfigured });
+});
+
+// ---------------------------------------------------------------------------
 // GET /v1/beats/:id/nft — NFT licensing info for a beat.
 // tokenId = uint256(SHA-256 fingerprint), so the token is cryptographically
 // tied to the exact audio. Returns configured=false until BEAT_NFT_ADDRESS
-// is set (see contracts/scripts/deploy.ts).
+// is set (see contracts/scripts/deploy.ts). `listing` reports what can
+// actually be bought right now: a license type is listed only when the
+// producer set a price AND stocked licenses in the contract — the two
+// conditions BeatNFT.buy() requires. A display price alone is not a buy.
 // ---------------------------------------------------------------------------
 export const beatNftInfo = asyncHandler(async (req: Request, res: Response) => {
   const beat = await prisma.beat.findUnique({ where: { id: req.params.id } });
@@ -684,11 +927,14 @@ export const beatNftInfo = asyncHandler(async (req: Request, res: Response) => {
     return res.json({ configured: false });
   }
   const fp = beat.fingerprint.startsWith('0x') ? beat.fingerprint : `0x${beat.fingerprint}`;
+  const listing = await getNftListing(beat.fingerprint);
   res.json({
     configured: true,
     contract: config.beatNftAddress,
     tokenId: BigInt(fp).toString(10),
     fingerprint: fp,
     metadataURI: `${config.apiBaseUrl}/v1/beats/${beat.id}`,
+    listing: { lease: listing.lease, exclusive: listing.exclusive },
+    royaltyBps: listing.royaltyBps,
   });
 });
