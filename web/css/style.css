@@ -190,6 +190,18 @@ audio.wide { width: 100%; margin-top: 12px; }
   box-shadow: 0 12px 40px rgba(0,0,0,.6); }
 .volt-panel-head { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
 .volt-panel-head img { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; }
+/* Volt fab vs the bottom tab bar (Nov 13 bug — Star's phone): the fab is
+   88px tall at bottom:22px, which lands right on top of the fixed tab bar
+   on has-tabbar pages and covers the Cards / Profile tabs. On those pages
+   the fab (and the toast/panel above it) lift clear of the tab bar height
+   plus the phone's safe-area inset. Desktop (no tab bar) keeps the
+   original positions. Small screens get a slightly smaller fab. */
+body.has-tabbar .volt-fab { bottom: calc(104px + env(safe-area-inset-bottom, 0px)); }
+body.has-tabbar .volt-toast,
+body.has-tabbar .volt-panel { bottom: calc(204px + env(safe-area-inset-bottom, 0px)); }
+@media (max-width: 640px) {
+  .volt-fab { width: 64px; height: 64px; }
+}
 .volt-panel-head span { color: var(--mut); font-size: 13px; }
 .volt-tour-btn { width: 100%; margin-bottom: 10px; }
 .volt-links { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -326,6 +338,8 @@ body.has-tabbar { padding-bottom: 88px; }
 .cop-line { background: var(--panel2); border: 1px solid var(--line); border-left: 4px solid var(--line);
   border-radius: 4px 12px 12px 12px; padding: 10px 14px; font-size: 14px; margin-top: 10px; line-height: 1.45; }
 .cop-line.bat-volt { border-left-color: var(--pur); } .cop-line.bat-volt b { color: #c9a7ff; }
+.cop-tag { font-style: normal; font-size: 10px; font-weight: 700; letter-spacing: .04em; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--line); color: var(--mut); margin-left: 6px; vertical-align: middle; }
+.cop-tag-live { color: #7dff9e; border-color: #2f9e5f; }
 .cop-line.bat-bass { border-left-color: var(--blu); } .cop-line.bat-bass b { color: var(--blu); }
 .cop-line.bat-forte { border-left-color: var(--gold); } .cop-line.bat-forte b { color: var(--gold); }
 .cop-line.bat-gwei { border-left-color: var(--grn); } .cop-line.bat-gwei b { color: var(--grn); }
@@ -404,3 +418,94 @@ body.has-tabbar { padding-bottom: 88px; }
 .creator-totals { display:grid; grid-template-columns:repeat(auto-fit,minmax(110px,1fr)); gap:12px; text-align:center; }
 .creator-totals .num { font-size:22px; font-weight:700; }
 .solana-chip { display:inline-block; padding:4px 10px; border-radius:999px; border:1px solid var(--line); background:var(--panel2); font-size:13px; }
+
+/* --- Unified flow (best of ChatGPT + Grok + Claude) --- */
+/* Chain pill in the nav: which network the site is on. */
+.chain-pill { font-size: 11px; font-weight: 800; letter-spacing: .04em; color: var(--blu);
+  border: 1px solid rgba(77,163,255,.4); border-radius: 999px; padding: 4px 9px; white-space: nowrap; }
+/* VBEATS membership pill in the nav (Nov 13): real balance / member # only. */
+.member-pill { font-size: 11px; font-weight: 800; letter-spacing: .02em; color: #c9a7ff;
+  border: 1px solid rgba(150,60,255,.5); border-radius: 999px; padding: 4px 9px; white-space: nowrap;
+  text-decoration: none; margin-left: 6px; }
+.chain-explainer { margin: 22px 0 8px; color: var(--mut); font-size: 13px; }
+.chain-explainer summary { cursor: pointer; font-weight: 700; color: var(--txt); }
+.chain-explainer p { margin-top: 8px; line-height: 1.55; }
+/* State-aware home hero (Grok): one sentence, dual path, How It Works. */
+.flow-hero { text-align: center; padding: 26px 0 8px; }
+.flow-hero h1 { font-size: 30px; }
+.flow-hero h1 span { background: linear-gradient(135deg, var(--pur), var(--pnk));
+  -webkit-background-clip: text; background-clip: text; color: transparent; }
+.flow-hero p.lede { color: var(--mut); font-size: 16px; max-width: 560px; margin: 8px auto 0; }
+.flow-cta { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 16px; }
+.how-it-works { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 18px 0 6px; text-align: left; }
+.how-it-works .step-card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--rad); padding: 14px; }
+.how-it-works .step-card b { display: block; margin-bottom: 4px; }
+.how-it-works .step-card p { color: var(--mut); font-size: 13px; }
+/* Dual-path hero (Grok, Nov 13): Producer vs Listener/Artist cards.
+   Cold visitors only — returning users get a single CTA instead.
+   Brand colours: purple/pink neon + gold-on-black, same as the hero. */
+.path-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin: 18px 0 6px; text-align: left; }
+.path-card { display: block; background: var(--panel); border: 1px solid var(--line); border-radius: var(--rad); padding: 16px; color: var(--txt); text-decoration: none; }
+.path-card:hover { border-color: var(--pur); }
+.path-card b { display: block; font-size: 16px; margin-bottom: 4px; }
+.path-card p { color: var(--mut); font-size: 13px; line-height: 1.5; }
+.path-card .path-glyph { font-size: 22px; display: block; margin-bottom: 8px; }
+.path-card.path-producer { border-left: 3px solid var(--gold); }
+.path-card.path-listener { border-left: 3px solid var(--pnk); }
+.path-card .path-cta { display: inline-block; margin-top: 10px; color: var(--pnk); font-weight: 800; font-size: 13px; }
+/* Condensed stories row for returning users (Grok: feed is the star). */
+.stories.condensed { padding: 10px 2px 4px; }
+.stories.condensed .story .ring { width: 46px; height: 46px; }
+.stories.condensed .story .ring .glyph { font-size: 20px; }
+.stories.condensed .story { min-width: 56px; font-size: 11px; }
+/* Unified card: price in ETH first, USD second; honest badge; … menu. */
+.price-usd { color: var(--mut); font-weight: 400; font-size: 13px; }
+.chip-unverified { color: #c9a7ff; border-color: rgba(150,60,255,.4); }
+.card-menu { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.card-menu a { font-size: 13px; color: var(--pur); font-weight: 700; }
+/* Skeleton loader (free-tier cold start). */
+.skeleton-card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--rad); padding: 14px; margin-bottom: 22px; }
+.skeleton-line { border-radius: 8px; background: linear-gradient(90deg, var(--panel2) 25%, #1e1e28 50%, var(--panel2) 75%); background-size: 200% 100%; animation: sk-shimmer 1.2s infinite; }
+@keyframes sk-shimmer { to { background-position: -200% 0; } }
+.sk-title { height: 18px; width: 55%; margin-bottom: 8px; }
+.sk-sub { height: 12px; width: 35%; margin-bottom: 12px; }
+.sk-art { height: 180px; }
+/* Modal (sign-in + offers share it; replaces confirm()/prompt()). */
+.flow-modal { position: fixed; inset: 0; z-index: 100; background: rgba(2,2,8,.75);
+  display: flex; align-items: center; justify-content: center; padding: 20px; }
+.flow-modal-card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+  padding: 22px; max-width: 460px; width: 100%; max-height: 86vh; overflow-y: auto; }
+.flow-modal-card h3 { margin-bottom: 8px; }
+/* Post-action next-step card (Grok). */
+.next-steps { background: var(--panel); border: 1px solid var(--pur); border-radius: var(--rad); padding: 16px; margin-top: 14px; }
+/* Transaction status tray. */
+.flow-tx-tray { position: fixed; left: 50%; transform: translateX(-50%); bottom: 96px; z-index: 70;
+  background: var(--panel); border: 1px solid var(--pur); border-radius: 12px; padding: 10px 14px;
+  font-size: 13.5px; box-shadow: 0 10px 34px rgba(0,0,0,.6); max-width: calc(100vw - 32px); }
+.tx-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--gold); margin-right: 6px; animation: blink 1s infinite; }
+/* Global sticky audio player (Grok). */
+.flow-player { position: fixed; left: 0; right: 0; bottom: 76px; z-index: 65;
+  display: flex; align-items: center; gap: 10px; padding: 8px 16px;
+  background: rgba(16,16,22,.96); border-top: 1px solid var(--line); backdrop-filter: blur(12px); }
+.flow-player-title { flex: 1; font-weight: 700; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Pass progress + stepper (claim page). */
+.pass-progress-bar { height: 10px; border-radius: 6px; background: rgba(255,255,255,.08); overflow: hidden; margin: 8px 0 4px; }
+.pass-progress-bar > div { height: 100%; background: linear-gradient(90deg, #b04df0, #e8b64c); transition: width .6s; }
+.pass-step { display: flex; gap: 12px; margin-top: 14px; opacity: .55; }
+.pass-step.current { opacity: 1; }
+.pass-step.done { opacity: 1; }
+.pass-step.done .step-n { background: var(--grn); color: #06130a; }
+.pass-step .step-n { flex: 0 0 28px; height: 28px; border-radius: 50%; background: var(--gold, #e8b64c); color: #0b0b10; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+/* Upload wizard steps. */
+.wizard-steps { display: flex; gap: 8px; margin: 14px 0; }
+.wizard-steps span { flex: 1; text-align: center; font-size: 12px; font-weight: 700; color: var(--mut);
+  border-bottom: 3px solid var(--line); padding-bottom: 6px; }
+.wizard-steps span.on { color: var(--txt); border-color: var(--pur); }
+.wizard-steps span.done { color: var(--grn); border-color: var(--grn); }
+.upload-status { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; font-size: 14px; }
+.upload-status .done { color: var(--grn); }
+/* Sticky buy bar on beat detail (mobile). */
+.sticky-buy { position: sticky; bottom: 84px; z-index: 40; display: flex; gap: 8px; align-items: center;
+  background: rgba(16,16,22,.96); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; margin-top: 16px; }
+.sticky-buy .price { font-size: 18px; }
+.sticky-buy .btn { flex: 1; }

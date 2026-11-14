@@ -25,6 +25,27 @@ const VOLT_PASS_ABI = [
   'function mintFor(address to) returns (uint256)',
 ] as const;
 
+const VBEATS_STAKING_ABI = [
+  'function stakedAmount(address account) view returns (uint256)',
+  'function isStaked(address account) view returns (bool)',
+] as const;
+
+/** Exactly how much VBEATS a stake is (Star decision, 2026-11-13). */
+export const STAKE_REQUIRED = '1000';
+
+export interface StakeStatus {
+  /** False while VBEATS_STAKE_ADDRESS is unset — staking not live yet. */
+  configured: boolean;
+  /** Raw staked VBEATS (smallest units), as a decimal string. */
+  staked: string;
+  /** Human-readable staked amount (18 decimals applied). */
+  stakedFormatted: string;
+  /** True when the wallet has the full 1,000 VBEATS staked. */
+  isStaked: boolean;
+  /** Human-readable stake requirement, e.g. "1000". */
+  required: string;
+}
+
 export interface HoldingCheck {
   configured: boolean;
   /** Raw VBEATS balance (smallest units), as a decimal string. */
@@ -65,6 +86,45 @@ export function passConfigured(): boolean {
       ethers.isAddress(config.voltPassAddress) &&
       config.rpcUrl
   );
+}
+
+/** True once VBEATS_STAKE_ADDRESS points at a deployed VbeatsStaking
+ * contract on Robinhood Chain. False = staking not live yet. */
+export function stakeConfigured(): boolean {
+  return Boolean(
+    config.vbeatsStakeAddress &&
+      ethers.isAddress(config.vbeatsStakeAddress) &&
+      config.rhcRpcUrl
+  );
+}
+
+/** Read a wallet's stake in VbeatsStaking on Robinhood Chain. While the
+ * contract is undeployed (no address configured) this returns
+ * configured=false with a zero stake — never a fake active stake. RPC
+ * failures throw so the route can answer 502. */
+export async function checkStake(address: string): Promise<StakeStatus> {
+  const notLive: StakeStatus = {
+    configured: false,
+    staked: '0',
+    stakedFormatted: '0',
+    isStaked: false,
+    required: STAKE_REQUIRED,
+  };
+  if (!stakeConfigured()) return notLive;
+  const staking = new ethers.Contract(
+    config.vbeatsStakeAddress,
+    VBEATS_STAKING_ABI,
+    rhcProvider()
+  );
+  const raw: bigint = await staking.stakedAmount(address);
+  // VBEATS has 18 decimals (same as the holding check).
+  return {
+    configured: true,
+    staked: raw.toString(),
+    stakedFormatted: ethers.formatUnits(raw, 18),
+    isStaked: raw >= ethers.parseUnits(STAKE_REQUIRED, 18),
+    required: STAKE_REQUIRED,
+  };
 }
 
 async function tokenDecimals(): Promise<number> {

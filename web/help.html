@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Help Center — Verified Beats Studio</title>
+<link rel="icon" href="assets/logo.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<nav class="nav" id="nav"></nav>
+
+<main class="wrap" style="max-width:720px">
+  <div style="padding:26px 0 6px">
+    <h1 style="font-size:30px;margin-bottom:6px">Help Center</h1>
+    <p class="note">Real answers about the real site. Nothing here describes a feature that does not exist yet — where something is still coming, it says so.</p>
+  </div>
+
+  <div class="card" style="margin:18px 0">
+    <input id="help-search" type="search" placeholder="Search help — try “Volt Pass”, “lease”, “vote”, “mic”…" aria-label="Search help" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);color:inherit">
+    <p class="note" id="help-count" style="margin-top:8px"></p>
+  </div>
+
+  <div id="help-list">
+    <div class="card faq" style="margin:12px 0">
+      <h3>How do I connect my wallet?</h3>
+      <p class="note">Tap <b>Connect wallet</b> in the top bar and approve in your wallet app. VBeats runs on <b>Base</b> — beats, licenses, and the Volt Pass all live there. VBeats will never ask for your seed phrase, and no one on the team ever will. If your wallet is on the wrong network, switch it to Base before signing anything.</p>
+    </div>
+    <div class="card faq" style="margin:12px 0">
+      <h3>What is the Volt Pass, and how do I claim one?</h3>
+      <p class="note">The Volt Founding Producer Pass is soulbound (it cannot be transferred), capped at 1,000. To claim one you must <b>hold at least 10 $VBEATS</b> in your wallet — buy VBEATS on the market, then claim on the <a href="claim.html">claim page</a>. The claim checks your balance on-chain and mints the pass to your wallet; your tokens stay in your wallet. It unlocks the Founding Producer badge, early upload access, one gasless first export/mint, and a bookable showcase slot. 1 of 100 member slots is taken so far — the counter on the claim page is live.</p>
+    </div>
+    <div class="card faq" style="margin:12px 0">
+      <h3>How does buying a license work — lease vs exclusive?</h3>
+      <p class="note">A <b>lease</b> lets you use the beat in your track; an <b>exclusive (1-of-1)</b> means no more leases are sold. Licenses are ERC-1155 tokens on Base. Prices are in ETH (leases from ~0.005 ETH, exclusives from ~0.05 ETH) with a live USD estimate beside them.</p>
+      <p class="note"><b>Instant buy:</b> if the producer set a price and stocked licenses, the beat page shows a "Buy now" panel — the price is re-read from the contract at buy time and your wallet confirms the exact total. The full listed price goes to the producer; the contract takes no platform fee on direct buy.</p>
+      <p class="note"><b>Offer:</b> if instant buy is not available, make an offer instead. Your ETH is locked in the offers contract until the producer accepts, rejects, or it expires. If accepted, the producer is paid the agreed price and any remainder is refunded — no platform fee is taken. A 10% producer royalty applies on secondary sales only.</p>
+    </div>
+    <div class="card faq" style="margin:12px 0">
+      <h3>How do I upload and publish a beat?</h3>
+      <p class="note">Open the studio, make your beat, then use the upload page — a 3-step wizard: File, Details, Review &amp; register. Your audio gets a SHA-256 fingerprint, which is registered on-chain in the BeatRegistry contract on Base. Registration is queued and shown honestly: it is "queued", not "confirmed", until the chain says so. Once registered, the beat page shows its on-chain receipt with a Basescan link.</p>
+    </div>
+    <div class="card faq" style="margin:12px 0">
+      <h3>How does voting work?</h3>
+      <p class="note">Tap ▲ on any beat card or beat page. One vote per account per beat; tapping again retracts it. Vote weight is snapshotted when you vote: Volt Pass holders count 3, wallets holding at least 10 $VBEATS count 2, everyone else counts 1. The weekly Top Voted chart runs Monday–Sunday (UTC); house beats are pinned first. Sign-in is required to vote — if you are logged out, a sign-in box appears and returns you to the beat.</p>
+    </div>
+    <div class="card faq" style="margin:12px 0">
+      <h3>How do I recover a purchase?</h3>
+      <p class="note">Licenses are tokens in your wallet, not files on our server — they cannot be lost by logging out. Check the wallet box on your <a href="profile.html">profile page</a>, or open the beat page and look at the NFT licenses section for the contract address and token ID, then look that contract up on Basescan with your wallet address. There is no in-app purchase-history list yet — that is still to be built, and this page will say so until it exists. If a license you paid for is not showing in your wallet, bring the transaction hash to The Booth (below) and the team can look it up on-chain.</p>
+    </div>
+    <div class="card faq" style="margin:12px 0">
+      <h3>The hum button hears nothing / the mic won't start</h3>
+      <p class="note">Echobeatification records one bar of humming and turns it into a melody. If it hears nothing: first check the lock icon in your address bar and allow the microphone, then tap the hum button again — browsers can pause the mic, and the button retries it. There is a short count-in before it listens, it listens for about one bar (~2.5 seconds), and it keeps at most 4 pitched notes, snapped to the scale — so hum one clear melody line, not a full beat. If the mic is unavailable, the scripted safety net runs instead and says so.</p>
+    </div>
+    <div class="card faq" style="margin:12px 0">
+      <h3>What is SafeLock?</h3>
+      <p class="note">SafeLock is fingerprint registration + an on-chain receipt — your beat's SHA-256 fingerprint, registered in the BeatRegistry contract on Base, with a Basescan link as proof. See the <a href="safelock.html">SafeLock page</a> to look any beat up. VBeats does <b>not</b> run automated copyright detection — nobody's upload is scanned against a copyright database. If you believe a beat infringes your work, the SafeLock page has a report builder.</p>
+    </div>
+    <div class="card faq" style="margin:12px 0">
+      <h3>Is there a live chat or support email?</h3>
+      <p class="note">There is no dedicated support inbox or live chat yet. The fastest route is <a href="chat.html">The Booth</a> — the community chat on this site — or your <a href="profile.html">profile page</a>. Do not send your seed phrase or private keys to anyone, anywhere, for any reason.</p>
+    </div>
+  </div>
+
+  <div class="card" style="margin:18px 0 50px">
+    <h3 style="margin-bottom:10px">Which chain does what?</h3>
+    <div id="chain-explainer"></div>
+  </div>
+</main>
+
+<footer class="footer"><div class="footer-bat"><img src="assets/mascot-profile.webp" alt=""></div>Verified Beats Studio — Volt keeps the receipts.</footer>
+
+<script src="js/api.js"></script>
+<script src="js/flow.js"></script>
+<script src="js/volt.js"></script>
+<script>
+nav('');
+document.getElementById('chain-explainer').innerHTML = Flow.chainExplainerHtml();
+/* Search filters the FAQs by their text — no server call, no fake results. */
+const search = document.getElementById('help-search');
+const items = Array.from(document.querySelectorAll('.faq'));
+const count = document.getElementById('help-count');
+function applyFilter() {
+  const q = (search.value || '').trim().toLowerCase();
+  let shown = 0;
+  items.forEach(it => {
+    const hit = !q || it.textContent.toLowerCase().includes(q);
+    it.style.display = hit ? '' : 'none';
+    if (hit) shown++;
+  });
+  count.textContent = q
+    ? (shown ? shown + ' of ' + items.length + ' answers match "' + search.value.trim() + '".' : 'No answers match "' + search.value.trim() + '". Try “Volt Pass”, “lease”, or “mic”.')
+    : items.length + ' answers.';
+}
+search.addEventListener('input', applyFilter);
+applyFilter();
+</script>
+</body>
+</html>

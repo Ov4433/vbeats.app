@@ -25,23 +25,37 @@
 
   <div class="card" id="upload-card" style="display:none">
     <h2 style="margin-bottom:6px">New beat</h2>
+    <div class="wizard-steps" id="wiz-steps"><span class="on" data-wiz="1">1 · File</span><span data-wiz="2">2 · Details</span><span data-wiz="3">3 · Review &amp; register</span></div>
     <div id="up-err"></div>
-    <div class="field"><label>Audio file (wav / mp3)</label><input type="file" id="audio" accept="audio/*"></div>
-    <div class="field"><label>Title</label><input id="title" placeholder="Midnight Drive"></div>
-    <div class="row2">
-      <div class="field"><label>Genre</label>
-        <select id="genre"><option>Trap</option><option>Hip-Hop</option><option>R&amp;B</option><option>Pop</option><option>Drill</option><option>Afrobeats</option><option>EDM</option><option>Other</option></select>
+    <div id="wiz-1">
+      <div class="field"><label>Audio file (wav / mp3)</label><input type="file" id="audio" accept="audio/*"></div>
+      <p class="note">Drop your audio — Volt fingerprints it the second it lands.</p>
+      <button class="btn" id="wiz-next-1" style="width:100%;margin-top:12px">Next: details →</button>
+    </div>
+    <div id="wiz-2" style="display:none">
+      <div class="field"><label>Title</label><input id="title" placeholder="Midnight Drive"></div>
+      <div class="row2">
+        <div class="field"><label>Genre</label>
+          <select id="genre"><option>Trap</option><option>Hip-Hop</option><option>R&amp;B</option><option>Pop</option><option>Drill</option><option>Afrobeats</option><option>EDM</option><option>Other</option></select>
+        </div>
+        <div class="field"><label>BPM</label><input id="bpm" type="number" min="1" max="999" placeholder="140"></div>
       </div>
-      <div class="field"><label>BPM</label><input id="bpm" type="number" min="1" max="999" placeholder="140"></div>
+      <div class="row2">
+        <div class="field"><label>Price (ETH)</label><input id="price" type="number" min="0" step="0.001" value="0.005"></div>
+        <div class="field"><label>Key (optional)</label><input id="key" placeholder="Am" maxlength="16"></div>
+      </div>
+      <div class="field"><label>Description</label><textarea id="desc" rows="3" placeholder="Dark trap beat, heavy 808s…"></textarea></div>
+      <div style="display:flex;gap:8px"><button class="btn ghost" id="wiz-back-2" style="flex:1">← Back</button><button class="btn" id="wiz-next-2" style="flex:2">Next: review →</button></div>
     </div>
-    <div class="row2">
-      <div class="field"><label>Price (ETH)</label><input id="price" type="number" min="0" step="0.001" value="0.005"></div>
-      <div class="field"><label>Key (optional)</label><input id="key" placeholder="Am" maxlength="16"></div>
+    <div id="wiz-3" style="display:none">
+      <div id="wiz-review" class="card" style="margin-bottom:12px"></div>
+      <button class="btn" id="up-go" style="width:100%">Upload beat</button>
+      <p class="note">SHA-256 is computed server-side; with the relayer configured the fingerprint is registered on Base automatically.</p>
+      <div class="upload-status" id="up-status" style="display:none"></div>
+      <div id="up-done"></div>
+      <div id="up-next"></div>
+      <p style="margin-top:12px"><button class="btn ghost small" id="wiz-back-3">← Back to details</button></p>
     </div>
-    <div class="field"><label>Description</label><textarea id="desc" rows="3" placeholder="Dark trap beat, heavy 808s…"></textarea></div>
-    <button class="btn" id="up-go" style="width:100%">Upload beat</button>
-    <p class="note">SHA-256 is computed server-side; with the relayer configured the fingerprint is registered on Base automatically.</p>
-    <div id="up-done"></div>
   </div>
   </div><!-- /up-grid left -->
   <aside class="sidekick">
@@ -54,6 +68,7 @@
 </main>
 <footer class="footer"><div class="footer-bat"><img src="assets/mascot-profile.webp" alt=""></div>Verified Beats Studio — Volt keeps the receipts.</footer>
 <script src="js/api.js"></script>
+<script src="js/flow.js"></script>
 <script src="js/volt.js"></script>
 <script>
 nav('upload.html');
@@ -85,15 +100,43 @@ $('auth-go').onclick = async () => {
   } catch (e) { showErr('auth-err', e.message); }
 };
 
+function showWiz(n) {
+  [1, 2, 3].forEach(i => { document.getElementById('wiz-' + i).style.display = i === n ? '' : 'none'; });
+  document.querySelectorAll('#wiz-steps span').forEach(s => {
+    const k = Number(s.dataset.wiz);
+    s.classList.toggle('on', k === n);
+    s.classList.toggle('done', k < n);
+  });
+}
+$('wiz-next-1').onclick = () => {
+  if (!$('audio').files[0]) { showErr('up-err', 'Choose an audio file first.'); return; }
+  showErr('up-err', '');
+  showWiz(2);
+};
+$('wiz-back-2').onclick = () => showWiz(1);
+$('wiz-next-2').onclick = () => {
+  if (!$('title').value.trim()) { showErr('up-err', 'Title is required.'); return; }
+  showErr('up-err', '');
+  $('wiz-review').innerHTML = '<b>' + esc($('title').value.trim()) + '</b><p class="note" style="margin-top:6px">' +
+    esc($('genre').value) + ($('bpm').value ? ' · ' + esc($('bpm').value) + ' BPM' : '') +
+    ($('key').value.trim() ? ' · ' + esc($('key').value.trim()) : '') +
+    '<br>Price: ' + esc($('price').value || '0') + ' ETH &middot; File: ' + esc($('audio').files[0].name) + '</p>';
+  showWiz(3);
+};
+$('wiz-back-3').onclick = () => showWiz(2);
+
 $('up-go').onclick = async () => {
   const file = $('audio').files[0];
   const title = $('title').value.trim(), genre = $('genre').value;
   const price = parseFloat($('price').value);
+  const statusEl = $('up-status');
   try {
     if (!file) throw new Error('Choose an audio file first.');
     if (!title) throw new Error('Title is required.');
     if (!(price >= 0)) throw new Error('Price must be a non-negative number.');
     $('up-go').disabled = true; $('up-go').textContent = 'Uploading…';
+    statusEl.style.display = '';
+    statusEl.innerHTML = '<div>⏳ Uploading file…</div>';
     const fd = new FormData();
     fd.append('audio', file);
     fd.append('title', title); fd.append('genre', genre);
@@ -105,12 +148,30 @@ $('up-go').onclick = async () => {
     if ($('key').value.trim()) fd.append('key', $('key').value.trim());
     if ($('desc').value.trim()) fd.append('description', $('desc').value.trim());
     const beat = await api.upload(fd);
+    // Live status: uploaded + fingerprinted are confirmed by the response.
+    // On-chain registration runs async in the relayer — queued, not faked.
+    statusEl.innerHTML = '<div class="done">✓ Uploaded</div><div class="done">✓ Fingerprinted (SHA-256)</div>' +
+      '<div>⏳ On-chain registration — queued. Check the beat page for live status.</div>';
     $('up-done').innerHTML = `<div class="badge ok" style="margin-top:14px">✓ Uploaded &amp; fingerprinted</div>
       <p class="note"><a href="beat.html?id=${esc(beat.id)}" style="color:var(--pur)">View your beat →</a></p>`;
+    Flow.nextSteps($('up-next'), {
+      title: 'Your beat is live — what next?',
+      text: 'It is in the feed and the marketplace now. Share it, or drop another.',
+      actions: [
+        { label: 'View your beat', href: 'beat.html?id=' + encodeURIComponent(beat.id) },
+        { label: 'See it in the feed', href: 'index.html', ghost: true },
+        { label: 'Upload another', href: 'upload.html', ghost: true },
+      ],
+    });
   } catch (e) { showErr('up-err', e.message); Volt.help("Upload failed — usually the file or the connection. Check you're signed in, then try again."); }
   finally { $('up-go').disabled = false; $('up-go').textContent = 'Upload beat'; }
 };
 refresh();
+// Return to where a sign-in modal sent you from (vote, buy, …).
+try {
+  const ret = sessionStorage.getItem('vbeats_return');
+  if (ret && api.loggedIn()) { sessionStorage.removeItem('vbeats_return'); location.href = ret; }
+} catch (e) { /* storage unavailable — stay here */ }
 </script>
 </body>
 </html>

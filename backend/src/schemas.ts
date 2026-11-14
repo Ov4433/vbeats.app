@@ -38,6 +38,10 @@ export const beatCreateSchema = z.object({
   imageUrl: z.string().url().max(2048).optional(),
   artworkUrl: z.string().url().max(2048).optional(),
   fingerprint: z.string().max(128).optional(),
+  // Make-a-song: kind + parentBeatId. coSignStatus is NEVER client-set —
+  // the controller decides it (own beat → live, someone else's → pending).
+  kind: z.enum(['beat', 'song']).optional(),
+  parentBeatId: z.string().max(64).optional(),
 });
 
 export const beatUpdateSchema = beatCreateSchema.partial();

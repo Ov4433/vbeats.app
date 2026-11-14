@@ -5,14 +5,17 @@ interface ButtonProps {
   title: string;
   style?: ViewStyle;
   variant?: 'primary' | 'secondary';
+  disabled?: boolean;
 }
 
-export default function Button({ onPress, title, style, variant = 'primary' }: ButtonProps) {
+export default function Button({ onPress, title, style, variant = 'primary', disabled = false }: ButtonProps) {
   return (
     <TouchableOpacity
+      disabled={disabled}
       style={[
         styles.button,
         variant === 'secondary' && styles.buttonSecondary,
+        disabled && styles.buttonDisabled,
         style,
       ]}
       onPress={onPress}
@@ -31,7 +34,7 @@ export default function Button({ onPress, title, style, variant = 'primary' }: B
 
 const styles = StyleSheet.create({
   button: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#ff3d9a',
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderRadius: 8,
@@ -41,7 +44,10 @@ const styles = StyleSheet.create({
   buttonSecondary: {
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: '#007AFF',
+    borderColor: '#ff3d9a',
+  },
+  buttonDisabled: {
+    opacity: 0.45,
   },
   text: {
     color: '#fff',
@@ -49,6 +55,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   textSecondary: {
-    color: '#007AFF',
+    color: '#ff3d9a',
   },
 });

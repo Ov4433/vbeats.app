@@ -30,6 +30,8 @@ model User {
   plays        Play[]
   chatMessages ChatMessage[]
   votes        Vote[]
+  featuresReceived FeatureRequest[] @relation("FeatureProducer")
+  featuresSent     FeatureRequest[] @relation("FeatureRequester")
 }
 
 model ChatMessage {
@@ -68,11 +70,24 @@ model Beat {
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   isHouse     Boolean  @default(false)
+  // Make-a-song (Nov 13): a song is a vocal take over a parent beat.
+  // kind 'beat' | 'song'; coSignStatus 'live' | 'pending' | 'rejected'.
+  // A song over someone else's beat starts 'pending' — it stays out of
+  // the public feed until the parent beat's producer approves it.
+  kind         String   @default("beat")
+  parentBeatId String?
+  parentBeat   Beat?    @relation("BeatSongs", fields: [parentBeatId], references: [id], onDelete: SetNull)
+  songs        Beat[]   @relation("BeatSongs")
+  coSignStatus String   @default("live")
+  coSignedAt   DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   transactions Transaction[]
+  escrowListings EscrowListing[]
   plays       Play[]
   votes       Vote[]
+  featuresAsSong   FeatureRequest[] @relation("FeatureSong")
+  featuresAsParent FeatureRequest[] @relation("FeatureParent")
 
   @@index([userId])
   @@index([genre])
@@ -91,11 +106,48 @@ model Transaction {
   type            String   @default("license") // license | purchase
   status          String   @default("completed")
   stripePaymentId String?
+  // Money path (Nov 13): on-chain license purchase receipt. txHash is the
+  // Basescan hash of a BeatNFT.buy() call; licenseKind 'lease'|'exclusive'.
+  // Crypto-native only — no fiat/card data is ever stored here.
+  txHash          String?
+  licenseKind     String?
+  // Escrow fee (Nov 13): channel 'direct' | 'escrow' (default 'direct'
+  // for rows recorded before the escrow route existed). feeEth is the
+  // 5% platform fee taken by BeatEscrow at settlement on escrow sales
+  // (0 on direct sales, which are legacy 0%-fee). amount is always the
+  // GROSS price the buyer paid; the dashboard nets the fee off.
+  channel         String?
+  feeEth          Float?
   createdAt       DateTime @default(now())
 
   @@index([buyerId])
   @@index([sellerId])
   @@index([beatId])
+}
+
+// Escrow listing registry (Nov 13): BeatEscrow has no fingerprint lookup,
+// so the buy panel finds the active escrow listing for a beat here.
+// One row per on-chain listingId; the producer reports it right after
+// list() mines, and the backend verifies seller + fingerprint + active
+// on-chain before accepting it. active is a DB mirror — the by-beat read
+// re-checks listings(listingId).active on-chain when it can, so a
+// settled/cancelled listing stops showing even if the row is stale.
+model EscrowListing {
+  id        String   @id @default(cuid())
+  beatId    String
+  beat      Beat     @relation(fields: [beatId], references: [id], onDelete: Cascade)
+  listingId Int
+  exclusive Boolean  @default(false)
+  amount    Int
+  priceWei  String   // TOTAL lot price in wei (fund() takes exactly this)
+  seller    String
+  active    Boolean  @default(true)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([listingId])
+  @@index([beatId, active])
 }
 
 model Play {
@@ -126,6 +178,31 @@ model Vote {
   @@unique([beatId, userId])
   @@index([beatId])
   @@index([createdAt])
+}
+
+// A feature / co-sign request (Nov 13): a singer asks the parent beat's
+// producer to feature their song — i.e. to co-sign it live. Accepting
+// sets the song's coSignStatus to 'live'; declining sets it 'rejected'.
+// There is NO on-chain co-sign: this is a plain DB/API request + flag,
+// honestly labelled in the UI. One pending request per song at a time.
+model FeatureRequest {
+  id           String   @id @default(cuid())
+  songId       String
+  song         Beat     @relation("FeatureSong", fields: [songId], references: [id], onDelete: Cascade)
+  parentBeatId String
+  parentBeat   Beat     @relation("FeatureParent", fields: [parentBeatId], references: [id], onDelete: Cascade)
+  producerId   String
+  producer     User     @relation("FeatureProducer", fields: [producerId], references: [id], onDelete: Cascade)
+  requesterId  String
+  requester    User     @relation("FeatureRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  status       String   @default("pending") // pending | accepted | declined
+  message      String?
+  createdAt    DateTime @default(now())
+  respondedAt  DateTime?
+
+  @@index([producerId, status])
+  @@index([requesterId])
+  @@index([songId, status])
 }
 
 // A Volt Pass claim (token-gated buy-in). One per wallet; memberNumber is

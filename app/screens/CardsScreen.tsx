@@ -84,8 +84,14 @@ export default function CardsScreen({ navigation }: any) {
                   {beat.bpm ? ` · ${beat.bpm} BPM` : ''}
                 </Text>
                 <View style={styles.cardRow}>
-                  <Text style={styles.cardPrice}>${beat.price}</Text>
-                  <Text style={styles.chip}>✓ VERIFIED</Text>
+                  <Text style={styles.cardPrice}>
+                    {Number(beat.price) > 0 ? `${beat.price} ETH` : 'Offer'}
+                  </Text>
+                  {beat.fingerprint ? (
+                    <Text style={styles.chip}>✓ Fingerprinted</Text>
+                  ) : (
+                    <Text style={[styles.chip, styles.chipUnverified]}>Not verified yet</Text>
+                  )}
                 </View>
               </View>
             </TouchableOpacity>
@@ -115,6 +121,7 @@ const styles = StyleSheet.create({
   cardRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   cardPrice: { color: '#fff', fontWeight: '800', fontSize: 14 },
   chip: { color: '#34c759', fontSize: 9.5, fontWeight: '800' },
+  chipUnverified: { color: '#c9a7ff' },
   errorText: { color: '#ff6b5e', marginBottom: 14, textAlign: 'center' },
   retry: { borderWidth: 1, borderColor: '#23232e', paddingHorizontal: 18, paddingVertical: 10, borderRadius: 9 },
   retryText: { color: '#fff', fontWeight: '700' },

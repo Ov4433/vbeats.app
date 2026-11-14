@@ -7,16 +7,19 @@ import { HttpError } from '../middleware/errorHandler';
 import {
   buildStatus,
   checkHolding,
+  checkStake,
   getOnChainMemberCount,
   getPassState,
   mintClaimPass,
   passConfigured,
+  STAKE_REQUIRED,
 } from '../services/passService';
 
 // Volt Pass claim routes — the token-gated buy-in.
 //   GET  /v1/pass/status             member counter + showcase gate state
 //   GET  /v1/pass/eligibility/:addr VBEATS holding vs the claim threshold
 //   GET  /v1/pass/me/:addr           this wallet's pass + member record
+//   GET  /v1/pass/stake/:addr       VBEATS stake status (1,000 to unlock)
 //   POST /v1/pass/claim              verify signature + holding, mint the pass
 //
 // The claimant signs "vbeats-pass-claim:<address>:<bat>:<timestampMs>" with
@@ -77,12 +80,53 @@ router.get(
     try {
       const { address } = req.params;
       if (!ethers.isAddress(address)) throw httpError(400, 'Invalid address');
-      const holding = await checkHolding(ethers.getAddress(address));
-      const pass = await getPassState(ethers.getAddress(address)).catch(() => ({
+      const checksum = ethers.getAddress(address);
+      const holding = await checkHolding(checksum);
+      const pass = await getPassState(checksum).catch(() => ({
         hasPass: false,
         tokenId: null,
       }));
-      res.json({ ...holding, hasPass: pass.hasPass, memberNumber: pass.tokenId });
+      // A staker counts as a member. The stake read is best-effort
+      // here — a stake-RPC outage must not break the member endpoint,
+      // so it degrades to "not live" instead of throwing. Stake fields
+      // are namespaced (stakeConfigured / isStaked / …) so they never
+      // overwrite the holding's own `configured` above.
+      const stake = await checkStake(checksum).catch(() => ({
+        configured: false,
+        staked: '0',
+        stakedFormatted: '0',
+        isStaked: false,
+        required: STAKE_REQUIRED,
+      }));
+      res.json({
+        ...holding,
+        hasPass: pass.hasPass,
+        memberNumber: pass.tokenId,
+        stakeConfigured: stake.configured,
+        isStaked: stake.isStaked,
+        staked: stake.staked,
+        stakedFormatted: stake.stakedFormatted,
+        stakeRequired: stake.required,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// VBEATS stake status (Nov 13): 1,000 VBEATS staked unlocks selling only
+// (listing, Make a song, producer dashboard). Buying in ETH and voting
+// stay open to everyone — no stake required for either.
+// While the stake contract is undeployed this answers configured=false
+// with a zero stake — never a fake active stake. A configured contract
+// that cannot be read answers 502 via the error handler.
+router.get(
+  '/stake/:address',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { address } = req.params;
+      if (!ethers.isAddress(address)) throw httpError(400, 'Invalid address');
+      res.json(await checkStake(ethers.getAddress(address)));
     } catch (err) {
       next(err);
     }
@@ -96,12 +140,21 @@ router.get(
       const { address } = req.params;
       if (!ethers.isAddress(address)) throw httpError(400, 'Invalid address');
       const checksum = ethers.getAddress(address);
-      const [record, pass, members] = await Promise.all([
+      const [record, pass, members, stake] = await Promise.all([
         prisma.passClaim
           .findUnique({ where: { walletAddress: checksum } })
           .catch(() => null),
         getPassState(checksum).catch(() => ({ hasPass: false, tokenId: null })),
         memberCount(),
+        // A staker counts as a member (additive fields only). Best-
+        // effort here, same as eligibility — never breaks /me.
+        checkStake(checksum).catch(() => ({
+          configured: false,
+          staked: '0',
+          stakedFormatted: '0',
+          isStaked: false,
+          required: STAKE_REQUIRED,
+        })),
       ]);
       const status = buildStatus(members);
       res.json({
@@ -112,6 +165,12 @@ router.get(
         showcaseUnlocked: status.showcaseUnlocked,
         members,
         memberGoal: status.memberGoal,
+        // Stake fields namespaced (see eligibility) — additive only.
+        stakeConfigured: stake.configured,
+        isStaked: stake.isStaked,
+        staked: stake.staked,
+        stakedFormatted: stake.stakedFormatted,
+        stakeRequired: stake.required,
       });
     } catch (err) {
       next(err);

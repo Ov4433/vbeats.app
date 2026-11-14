@@ -114,7 +114,11 @@ export default function ExploreScreen({ navigation }: any) {
                   {beat.duration ? ` · ${Math.floor(beat.duration / 60)}:${String(Math.round(beat.duration % 60)).padStart(2, '0')}` : ''}
                 </Text>
               </View>
-              <Text style={styles.rowPrice}>${beat.price}</Text>
+              {/* Honest price (Grok, Nov 13): ETH first, never "$" + an
+                  ETH number as if it were dollars. No price → Offer. */}
+              <Text style={styles.rowPrice}>
+                {Number(beat.price) > 0 ? `${beat.price} ETH` : 'Offer'}
+              </Text>
             </TouchableOpacity>
           )}
         />

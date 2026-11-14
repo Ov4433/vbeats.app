@@ -49,6 +49,17 @@ export interface SerializedBeat {
   duration: number;
   createdAt: string;
   updatedAt: string;
+  // Make-a-song fields (kind / parentBeatId / coSignStatus are stored;
+  // parentBeat is populated by the controller when it includes it).
+  kind?: string;
+  parentBeatId?: string | null;
+  coSignStatus?: string;
+  coSignedAt?: string | null;
+  // "Co-signed by …" (money path, Nov 13): the parent beat producer's
+  // username, attached by the controller when a song went live through an
+  // accepted feature request. Absent = not co-signed this way.
+  coSignedBy?: { id: string; username: string } | null;
+  parentBeat?: { id: string; title: string; userId: string } | null;
   // Card-back stats (populated by the beats controller, not stored)
   stats?: BeatCardStats;
   // Vote totals (populated by the beats controller, not stored)
@@ -94,6 +105,13 @@ export function serializeBeat(beat: Beat): SerializedBeat {
     description: beat.description,
     dur: beat.durationSec,
     duration: beat.durationSec,
+    kind: (beat as any).kind ?? 'beat',
+    parentBeatId: (beat as any).parentBeatId ?? null,
+    coSignStatus: (beat as any).coSignStatus ?? 'live',
+    coSignedAt: (beat as any).coSignedAt ? (beat as any).coSignedAt.toISOString() : null,
+    parentBeat: (beat as any).parentBeat
+      ? { id: (beat as any).parentBeat.id, title: (beat as any).parentBeat.title, userId: (beat as any).parentBeat.userId }
+      : null,
     date: beat.createdAt.toISOString(),
     createdAt: beat.createdAt.toISOString(),
     updatedAt: beat.updatedAt.toISOString(),
@@ -115,6 +133,8 @@ export interface BeatInput {
   imageUrl?: unknown;
   artworkUrl?: unknown;
   fingerprint?: unknown;
+  kind?: unknown;
+  parentBeatId?: unknown;
 }
 
 export interface NormalizedBeatInput {
@@ -128,6 +148,8 @@ export interface NormalizedBeatInput {
   audioUrl: string | null;
   imageUrl: string | null;
   fingerprint: string | null;
+  kind: 'beat' | 'song';
+  parentBeatId: string | null;
 }
 
 function toNumberOrNull(value: unknown): number | null {
@@ -159,5 +181,9 @@ export function normalizeBeatInput(body: BeatInput): NormalizedBeatInput {
     audioUrl: toStringOrNull(body.audioUrl),
     imageUrl: toStringOrNull(body.imageUrl ?? body.artworkUrl),
     fingerprint: toStringOrNull(body.fingerprint),
+    // Make-a-song: only 'song' is accepted; anything else is a plain beat.
+    // parentBeatId is validated against a real beat by the controller.
+    kind: String(body.kind ?? 'beat').trim().toLowerCase() === 'song' ? 'song' : 'beat',
+    parentBeatId: toStringOrNull(body.parentBeatId),
   };
 }

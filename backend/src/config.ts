@@ -42,6 +42,11 @@ export const config = {
   beatRegistryAddress: process.env.BEAT_REGISTRY_ADDRESS ?? '',
   beatNftAddress: process.env.BEAT_NFT_ADDRESS ?? '',
   beatOffersAddress: process.env.BEAT_OFFERS_ADDRESS ?? '',
+  // BeatEscrow (5% platform fee, Nov 13) + VouchSBT (buyer verification).
+  // Empty until set — escrow receipt checks and listing verification
+  // then record as 'pending' / refuse rather than faking a pass.
+  beatEscrowAddress: process.env.BEAT_ESCROW_ADDRESS ?? '',
+  vouchAddress: process.env.VOUCH_ADDRESS ?? '',
   // Relayer wallet private key for register-on-upload. When set (and the
   // RPC/contract vars above are set), each upload fires a registerBeat tx.
   // Leave empty to disable on-chain writes entirely.
@@ -53,6 +58,12 @@ export const config = {
   // VBEATS token contract on Robinhood Chain. Empty until the token
   // launches — claims stay closed while unset.
   vbeatsTokenAddress: process.env.VBEATS_TOKEN_ADDRESS ?? '',
+  // VbeatsStaking contract on Robinhood Chain (stake 1,000 VBEATS to
+  // sell — listing, Make a song, producer dashboard). Empty until
+  // deployed — the stake check then reports configured=false and
+  // reports configured=false and staking is "not live yet", never a
+  // fake active stake.
+  vbeatsStakeAddress: process.env.VBEATS_STAKE_ADDRESS ?? '',
   // VoltPass v2 contract on Base. Empty until the v2 deploy lands.
   voltPassAddress: process.env.VOLT_PASS_ADDRESS ?? '',
   // How many VBEATS a wallet must hold to claim the pass.

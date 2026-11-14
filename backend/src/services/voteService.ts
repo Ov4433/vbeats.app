@@ -1,6 +1,7 @@
 import { prisma } from '../db';
 import {
   checkHolding as defaultCheckHolding,
+  checkStake as defaultCheckStake,
   getPassState as defaultGetPassState,
 } from './passService';
 
@@ -10,7 +11,10 @@ import {
 // A vote's weight is snapshotted at vote time from the voter's wallet:
 //   3 — Volt Pass holder (VoltPass on Base, via passService.getPassState)
 //   2 — VBEATS holder at/above the pass threshold (Robinhood Chain,
-//       via passService.checkHolding)
+//       via passService.checkHolding) OR a VBEATS staker (1,000 VBEATS
+//       staked in VbeatsStaking — a staker counts as a member, and their
+//       wallet balance drops when they stake, so the holding check alone
+//       would wrongly drop them to weight 1)
 //   1 — everyone else (including voters with no wallet)
 // Chain reads are best-effort: any failure warns and degrades gracefully,
 // and computeVoteWeight NEVER throws.
@@ -19,18 +23,20 @@ import {
 export interface VoteWeightReaders {
   getPassState: typeof defaultGetPassState;
   checkHolding: typeof defaultCheckHolding;
+  checkStake: typeof defaultCheckStake;
 }
 
 /**
  * Pure weight decision — separable so it can be unit-tested without any
- * chain access. Pass beats holding; holding beats plain.
+ * chain access. Pass beats holding/stake; holding or stake beats plain.
  */
 export function decideWeight(input: {
   hasPass: boolean;
   eligible: boolean;
+  isStaked?: boolean;
 }): number {
   if (input.hasPass) return 3;
-  if (input.eligible) return 2;
+  if (input.eligible || input.isStaked) return 2;
   return 1;
 }
 
@@ -41,6 +47,7 @@ export async function computeVoteWeight(
   if (!walletAddress) return 1;
   const getPassState = readers.getPassState ?? defaultGetPassState;
   const checkHolding = readers.checkHolding ?? defaultCheckHolding;
+  const checkStake = readers.checkStake ?? defaultCheckStake;
 
   let hasPass = false;
   try {
@@ -64,7 +71,17 @@ export async function computeVoteWeight(
       err instanceof Error ? err.message : err
     );
   }
-  return decideWeight({ hasPass: false, eligible });
+  let isStaked = false;
+  try {
+    const stake = await checkStake(walletAddress);
+    isStaked = Boolean(stake?.isStaked);
+  } catch (err) {
+    console.warn(
+      '[votes] checkStake failed, falling back to holding weight:',
+      err instanceof Error ? err.message : err
+    );
+  }
+  return decideWeight({ hasPass: false, eligible, isStaked });
 }
 
 // ---------------------------------------------------------------------------
@@ -104,6 +121,30 @@ export async function votedBeatIds(
     select: { beatId: true },
   });
   return new Set(votes.map((v) => v.beatId));
+}
+
+/**
+ * Vote totals inside a time window (e.g. the current UTC week) — the
+ * honest input for "Trending this week". Same shape as voteTotals.
+ */
+export async function voteTotalsInWindow(
+  beatIds: string[],
+  start: Date,
+  end: Date
+): Promise<Map<string, VoteTotal>> {
+  if (beatIds.length === 0) return new Map();
+  const groups = await prisma.vote.groupBy({
+    by: ['beatId'],
+    where: { beatId: { in: beatIds }, createdAt: { gte: start, lt: end } },
+    _sum: { weight: true },
+    _count: { beatId: true },
+  });
+  return new Map(
+    groups.map((g) => [
+      g.beatId,
+      { totalWeight: g._sum.weight ?? 0, count: g._count.beatId },
+    ])
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -181,9 +222,30 @@ export async function topVoted(limit = 10): Promise<{
       _min: { createdAt: true },
     }),
   ]);
-  return {
-    week,
-    weekList: rankGroups(weekGroups as RankableGroup[], limit),
-    allTimeList: rankGroups(allTimeGroups as RankableGroup[], limit),
-  };
+  const weekList = rankGroups(weekGroups as RankableGroup[], limit);
+  const allTimeList = rankGroups(allTimeGroups as RankableGroup[], limit);
+
+  // Vote gate (Nov 13): a song that is still awaiting producer co-sign
+  // — or was declined — never surfaces in Top Voted, even if votes were
+  // somehow recorded for it. Beats are unaffected.
+  const allIds = [...new Set([...weekList, ...allTimeList].map((r) => r.beatId))];
+  if (allIds.length > 0) {
+    const rows = await prisma.beat.findMany({
+      where: { id: { in: allIds } },
+      select: { id: true, kind: true, coSignStatus: true },
+    });
+    const hidden = new Set(
+      rows
+        .filter((b: any) => b.kind === 'song' && b.coSignStatus !== 'live')
+        .map((b) => b.id)
+    );
+    if (hidden.size > 0) {
+      return {
+        week,
+        weekList: weekList.filter((r) => !hidden.has(r.beatId)),
+        allTimeList: allTimeList.filter((r) => !hidden.has(r.beatId)),
+      };
+    }
+  }
+  return { week, weekList, allTimeList };
 }

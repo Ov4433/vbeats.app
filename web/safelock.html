@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SafeLock — Verified Beats Studio</title>
+<link rel="icon" href="assets/logo.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<nav class="nav" id="nav"></nav>
+
+<main class="wrap" style="max-width:720px">
+  <div style="padding:26px 0 6px">
+    <h1 style="font-size:30px;margin-bottom:6px">🔒 SafeLock</h1>
+    <p class="note">What SafeLock is, honestly: your beat's SHA-256 fingerprint, registered on-chain in the BeatRegistry contract on Base, with a Basescan link as the receipt. That is the whole of it today.</p>
+    <p class="note"><b>VBeats does not run automated copyright detection.</b> No upload is scanned against a copyright database, and no beat is blocked or taken down by an algorithm. If you believe a beat infringes your work, use the report builder below.</p>
+  </div>
+
+  <div class="card" style="margin:18px 0">
+    <h3 style="margin-bottom:10px">Look a beat up</h3>
+    <p class="note">Paste a beat ID (the id in the beat page URL, after <span class="mono">beat.html?id=</span>) to see its fingerprint and on-chain status.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+      <input id="sl-id" type="text" placeholder="Beat ID" aria-label="Beat ID" style="flex:1;min-width:180px;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);color:inherit">
+      <button class="btn small" id="sl-go">Check</button>
+    </div>
+    <div id="sl-result" style="margin-top:12px"><p class="note">No beat checked yet.</p></div>
+  </div>
+
+  <div class="card" style="margin:18px 0" id="sl-own-card">
+    <h3 style="margin-bottom:10px">Your beats</h3>
+    <div id="sl-own"><p class="note">Sign in to see the fingerprint status of your own uploads.</p></div>
+  </div>
+
+  <div class="card" style="margin:18px 0 50px">
+    <h3 style="margin-bottom:10px">Report an issue</h3>
+    <p class="note">This builds a report you can copy and paste into <a href="chat.html">The Booth</a>. There is no automated takedown — a person on the team reads it and checks the fingerprint on-chain.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+      <input id="sl-beat-link" type="text" placeholder="Beat link — e.g. https://ov4433.github.io/vbeats.app/beat.html?id=…" aria-label="Beat link" style="flex:1;min-width:220px;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);color:inherit">
+    </div>
+    <textarea id="sl-claim" rows="3" placeholder="What is the issue? e.g. “This beat uses my track … released …”" aria-label="Your claim" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);color:inherit;margin-top:8px"></textarea>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+      <button class="btn small" id="sl-build">Build report</button>
+      <button class="btn small ghost" id="sl-copy" disabled>Copy report</button>
+      <a class="btn small ghost" href="chat.html">Open The Booth</a>
+    </div>
+    <pre id="sl-report" class="mono" style="white-space:pre-wrap;margin-top:12px;display:none"></pre>
+    <p class="note" id="sl-copy-note" style="margin-top:8px"></p>
+  </div>
+</main>
+
+<footer class="footer"><div class="footer-bat"><img src="assets/mascot-profile.webp" alt=""></div>Verified Beats Studio — Volt keeps the receipts.</footer>
+
+<script src="js/api.js"></script>
+<script src="js/flow.js"></script>
+<script src="js/volt.js"></script>
+<script>
+nav('');
+const $ = id => document.getElementById(id);
+
+/* Beat lookup: real fingerprint + real on-chain status from the backend.
+   "Not registered yet" is a real answer, not an error state. */
+$('sl-go').onclick = async () => {
+  const id = ($('sl-id').value || '').trim();
+  const out = $('sl-result');
+  if (!id) { out.innerHTML = '<p class="note">Paste a beat ID first.</p>'; return; }
+  out.innerHTML = '<p class="note">Checking…</p>';
+  try {
+    const [b, v] = await Promise.all([api.beat(id), api.verify(id).catch(() => null)]);
+    const fp = b.fingerprint || (v && v.fingerprint) || '';
+    const onChain = v ? v.onChain : null;
+    const configured = v ? v.chainConfigured : null;
+    out.innerHTML = '<p><b>' + esc(b.title || id) + '</b></p>'
+      + '<p class="mono" style="margin-top:8px">' + esc(fp || 'no fingerprint recorded') + '</p>'
+      + '<p style="margin-top:10px">' + (configured === false
+        ? '<span class="badge wait">Not on-chain yet — contract not configured</span>'
+        : onChain
+          ? '<span class="badge ok">✓ Registered on-chain</span>'
+          : '<span class="badge no">Fingerprint not registered on-chain</span>') + '</p>'
+      + (onChain && v.chainOwner ? '<p class="note">Registered owner ' + Flow.explorerAddr(v.chainOwner) + '</p>' : '')
+      + '<p class="note" style="margin-top:8px"><a href="beat.html?id=' + encodeURIComponent(id) + '">Open the beat page &rarr;</a> · Registry <a class="mono" href="https://basescan.org/address/' + esc(window.VBEATS_REGISTRY_ADDRESS || '') + '" target="_blank" rel="noopener">view contract on Basescan &rarr;</a></p>';
+    // Prefill the report builder with this beat.
+    $('sl-beat-link').value = location.origin + location.pathname.replace(/[^/]*$/, '') + 'beat.html?id=' + encodeURIComponent(id);
+  } catch (e) {
+    out.innerHTML = '<p class="note">Could not find that beat (' + esc(e.message || e) + '). Check the ID — it is the part after <span class="mono">beat.html?id=</span>.</p>';
+  }
+};
+$('sl-id').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('sl-go').click(); } });
+
+/* Own beats: same list the profile page uses, with the honest
+   fingerprint chip per beat; on-chain proof is checked lazily. */
+if (api.loggedIn()) {
+  api.get('/v1/beats').then(d => {
+    const beats = (d && d.beats) || [];
+    const box = $('sl-own');
+    if (!beats.length) {
+      box.innerHTML = '<p class="note">No uploads yet — <a href="studio.html">open the studio</a> and drop your first beat.</p>';
+      return;
+    }
+    box.innerHTML = beats.map(b =>
+      '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--line)">'
+      + '<a href="beat.html?id=' + esc(b.id) + '"><b>' + esc(b.title || b.id) + '</b></a>'
+      + '<span class="mono" style="font-size:12px">' + esc((b.fingerprint || '').slice(0, 18)) + '…</span>'
+      + Flow.verifyChip(b)
+      + '</div>').join('');
+    Flow.verifyCards(box);
+  }).catch(() => {
+    $('sl-own').innerHTML = '<p class="note">Could not load your uploads right now — try the lookup above with a beat ID.</p>';
+  });
+} else {
+  $('sl-own').innerHTML = '<p class="note">Sign in to see the fingerprint status of your own uploads.</p>'
+    + '<p style="margin-top:10px"><button class="btn small" onclick="Flow.signInModal(\'safelock\')">Sign in</button></p>';
+}
+
+/* Report builder: beat link + fingerprint (looked up live when possible)
+   + your claim, as plain text to paste into The Booth. Nothing is sent
+   anywhere from this page. */
+let lastReport = '';
+$('sl-build').onclick = async () => {
+  const link = ($('sl-beat-link').value || '').trim();
+  const claim = ($('sl-claim').value || '').trim();
+  const note = $('sl-copy-note');
+  const pre = $('sl-report');
+  if (!link && !claim) { note.textContent = 'Paste the beat link and write what the issue is first.'; return; }
+  let fp = '';
+  const m = link.match(/[?&]id=([^&]+)/);
+  if (m) {
+    try { const b = await api.beat(decodeURIComponent(m[1])); fp = b.fingerprint || ''; } catch { /* report still builds without it */ }
+  }
+  lastReport = 'SafeLock report — Verified Beats Studio\n'
+    + 'Beat: ' + (link || '(no link given)') + '\n'
+    + 'Fingerprint: ' + (fp || '(not looked up — paste the beat ID above and tap Check first)') + '\n'
+    + 'Claim: ' + (claim || '(no claim written)') + '\n'
+    + 'Reported from: ' + (api.wallet || 'not signed in') + '\n'
+    + 'Note: VBeats does not run automated copyright detection. This report is a request for a person to check the fingerprint on-chain.';
+  pre.textContent = lastReport;
+  pre.style.display = '';
+  $('sl-copy').disabled = false;
+  note.textContent = '';
+};
+$('sl-copy').onclick = async () => {
+  if (!lastReport) return;
+  try {
+    await navigator.clipboard.writeText(lastReport);
+    $('sl-copy-note').textContent = 'Report copied — paste it into The Booth.';
+  } catch {
+    $('sl-copy-note').textContent = 'Copy failed — select the report text above and copy it by hand.';
+  }
+};
+</script>
+</body>
+</html>
